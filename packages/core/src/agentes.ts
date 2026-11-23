@@ -32,6 +32,10 @@ export interface EjecucionSpec {
   cwd: string;
   /** "plan" no modifica archivos. */
   soloLectura?: boolean;
+  /** Conversación continuada: la primera vez crea la sesión y las siguientes la reanudan, sin reenviar el historial. */
+  sesion?: { id: string; reanudar: boolean };
+  /** Recibe el texto mientras se escribe. */
+  alTexto?: (delta: string) => void;
 }
 
 export function argumentosClaude(s: EjecucionSpec): string[] {
@@ -46,6 +50,8 @@ export function argumentosClaude(s: EjecucionSpec): string[] {
     '--verbose',
     ...(s.sistema ? ['--append-system-prompt', s.sistema] : []),
     ...(s.soloLectura ? ['--permission-mode', 'plan'] : []),
+    ...(s.sesion ? (s.sesion.reanudar ? ['--resume', s.sesion.id] : ['--session-id', s.sesion.id]) : []),
+    ...(s.alTexto ? ['--include-partial-messages'] : []),
   ];
 }
 
@@ -130,6 +136,17 @@ export function textoDeEvento(cli: CliId, linea: string): string | undefined {
   }
 }
 
+/** Fragmento de texto de un evento de flujo parcial (Claude Code: content_block_delta). */
+export function deltaDeEvento(cli: CliId, linea: string): string | undefined {
+  if (cli !== 'claude') return undefined;
+  try {
+    const e = JSON.parse(linea) as { type?: string; event?: { type?: string; delta?: { text?: string } } };
+    return e.type === 'stream_event' && e.event?.type === 'content_block_delta' ? e.event.delta?.text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function ejecutar(s: EjecucionSpec, alEvento?: (linea: string) => void): Promise<Resultado> {
   const cli = s.asignado.cli;
   const args = cli === 'claude' ? argumentosClaude(s) : argumentosCodex(s);
@@ -147,6 +164,10 @@ export function ejecutar(s: EjecucionSpec, alEvento?: (linea: string) => void): 
         if (!l.trim()) continue;
         eventos++;
         alEvento?.(l);
+        if (s.alTexto) {
+          const d = deltaDeEvento(cli, l);
+          if (d) s.alTexto(d);
+        }
         texto = textoDeEvento(cli, l) ?? texto;
       }
     });

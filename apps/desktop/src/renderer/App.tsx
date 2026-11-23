@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { GraphView } from './components/GraphView';
+import { Chat } from './components/Chat';
 import { Inicio } from './components/Inicio';
 import { Tablero } from './components/Tablero';
 import { AgentesPanel, AjustesPanel, HilosPanel, NotasPanel, RevisarPanel } from './components/Panels';
 import { api, type PerfilVista } from './lib/api';
 import type { NodoVista } from './lib/galaxy';
 
-type Vista = 'inicio' | 'tablero' | 'grafo' | 'notas' | 'revisar' | 'agentes' | 'hilos' | 'ajustes';
+type Vista = 'asistente' | 'inicio' | 'tablero' | 'grafo' | 'notas' | 'revisar' | 'agentes' | 'hilos' | 'ajustes';
 
 const Icono = ({ d }: { d: ReactNode }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -15,6 +16,7 @@ const Icono = ({ d }: { d: ReactNode }) => (
 );
 
 const SECCIONES: { id: Vista; nombre: string; icono: ReactNode }[] = [
+  { id: 'asistente', nombre: 'Asistente', icono: <Icono d={<><path d="M4 5h16v11H9l-5 4z" /><path d="M8.5 10h7M8.5 13h4" /></>} /> },
   { id: 'inicio', nombre: 'Mi día', icono: <Icono d={<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" /></>} /> },
   { id: 'tablero', nombre: 'Tablero', icono: <Icono d={<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 4v16M15 4v10" /></>} /> },
   { id: 'grafo', nombre: 'Grafo', icono: <Icono d={<><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="6" r="2.2" /><circle cx="12" cy="17" r="2.2" /><path d="M8 8l3 7M16.2 7.7L13 15M8.2 7h7.6" /></>} /> },
@@ -77,12 +79,20 @@ function Inspector({ nodo, cerrar }: { nodo: NodoVista; cerrar: () => void }) {
 }
 
 export function App() {
-  const [vista, setVista] = useState<Vista>('inicio');
+  const [vista, setVista] = useState<Vista>('asistente');
   const [prARevisar, setPrARevisar] = useState('');
   const [nodo, setNodo] = useState<NodoVista | null>(null);
   const [perfil, setPerfil] = useState<PerfilVista | null>(null);
   const [recarga, setRecarga] = useState(0);
   useEffect(() => void api.perfil().then(setPerfil), [recarga]);
+  const [perfilRol, setPerfilRol] = useState<string | undefined>();
+  const [perfilSaludo, setPerfilSaludo] = useState<string | undefined>();
+  useEffect(() => {
+    void api.conexion().then((c) => {
+      setPerfilRol(c.rol);
+      setPerfilSaludo(c.github.login ?? c.clickup.usuario);
+    });
+  }, [recarga]);
   return (
     <div className="aplicacion">
       <div className="barra-titulo" />
@@ -106,6 +116,9 @@ export function App() {
           {nodo && <Inspector nodo={nodo} cerrar={() => setNodo(null)} />}
         </div>
         {vista === 'notas' && <NotasPanel nodo={nodo} />}
+        <div className={vista === 'asistente' ? 'ocupa' : 'oculta'}>
+          <Chat rol={perfilRol} saludo={perfilSaludo} />
+        </div>
         {vista === 'inicio' && <Inicio version={recarga} abrirRevision={(n) => { setPrARevisar(n); setVista('revisar'); }} />}
         {vista === 'tablero' && <Tablero />}
         {vista === 'revisar' && <RevisarPanel inicial={prARevisar} />}

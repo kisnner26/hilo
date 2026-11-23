@@ -18,6 +18,7 @@ const FUNCIONES: { clave: Funcion; nombre: string; nota: string }[] = [
   { clave: 'documentacion', nombre: 'Documentación', nota: 'Subagente de documentos. Recomendado: Haiku 5.5.' },
   { clave: 'integracion', nombre: 'Integración', nota: 'Revisa PR y arma comentarios.' },
   { clave: 'testing', nombre: 'Testing', nota: 'Casos y evidencia.' },
+  { clave: 'asistente', nombre: 'Asistente (chat)', nota: 'Responde preguntas libres según tu rol, tus tareas y tus PR.' },
 ];
 
 // ---------- Notas ----------

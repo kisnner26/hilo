@@ -19,7 +19,7 @@ export interface ModeloAsignado {
   modelo: string;
   esfuerzo: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 }
-export type Funcion = 'orquestador' | 'desarrollo' | 'documentacion' | 'integracion' | 'testing';
+export type Funcion = 'orquestador' | 'desarrollo' | 'documentacion' | 'integracion' | 'testing' | 'asistente';
 export interface Config {
   perfil?: string;
   grafo?: string;
@@ -74,6 +74,22 @@ export interface Prueba {
   estado: 'ok' | 'aviso' | 'error';
   detalle: string;
   ayuda?: string;
+}
+export interface TarjetaVista {
+  tipo: 'tarea' | 'pr' | 'accion';
+  titulo: string;
+  detalle: string;
+  ref: string;
+  acciones: ('entender' | 'hacer' | 'revisar' | 'bloqueo')[];
+}
+export interface EventoChat {
+  conv: string;
+  tipo: 'respuesta' | 'inicio' | 'delta' | 'fin' | 'error';
+  texto?: string;
+  tarjetas?: TarjetaVista[];
+  pregunta?: string;
+  modelo?: string;
+  ms?: number;
 }
 export interface PaqueteVista {
   texto: string;
@@ -138,7 +154,7 @@ export interface InstalacionesVista {
 
 declare global {
   interface Window {
-    hilo?: { invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void };
+    hilo?: { invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -156,6 +172,7 @@ const MODELOS_DEMO: PerfilVista['modelos'] = {
   documentacion: { cli: 'claude', modelo: 'claude-haiku-5-5', esfuerzo: 'low' },
   integracion: { cli: 'claude', modelo: 'claude-sonnet-5-5', esfuerzo: 'low' },
   testing: { cli: 'claude', modelo: 'claude-sonnet-5-5', esfuerzo: 'low' },
+  asistente: { cli: 'claude', modelo: 'claude-sonnet-5-5', esfuerzo: 'low' },
 };
 
 /** En el navegador (sin Electron) responde con datos de demostración para poder ver y probar la interfaz. */
@@ -178,7 +195,37 @@ const DEMO_DIA: MiDiaVista = {
   ],
 };
 
+/** Sin Electron (navegador): respuestas de demostración con el mismo flujo de eventos. */
+const oyentesChat = new Set<(e: EventoChat) => void>();
+function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; ref: string } }): void {
+  const emitir = (e: Omit<EventoChat, 'conv'>, ms = 0) => setTimeout(() => oyentesChat.forEach((f) => f({ conv: p.conv, ...e })), ms);
+  const t = (p.texto ?? '').toLowerCase();
+  if (/tarea/.test(t) && /(que|qué)/.test(t)) {
+    emitir({
+      tipo: 'respuesta',
+      texto: 'Tienes 3 tareas abiertas como desarrollador:',
+      tarjetas: DEMO_DIA.tareas.map((x) => ({ tipo: 'tarea', titulo: `${x.codigo} · ${x.nombre.replace(/^[A-Z0-9-]+\s*[—–-]\s*/, '')}`, detalle: `${x.estado}${x.vence ? ` · vence ${x.vence.slice(0, 10)}` : ''}`, ref: x.codigo, acciones: x.codigo === 'GEN-01-FE' ? ['entender', 'hacer', 'revisar'] : ['entender', 'hacer'] })),
+      pregunta: '¿Con cuál empezamos? Dime si quieres entenderla, hacerla o revisarla.',
+    }, 300);
+    return;
+  }
+  const respuesta = p.tarea ? `**${p.tarea.accion}** ${p.tarea.ref}: (demostración) aquí el agente respondería con el plan, usando la descripción de ClickUp y el código del repositorio.` : 'Esta es una respuesta de demostración. En la app de escritorio, el agente de tu rol responde con tus tareas, tus PR y el código del proyecto.';
+  emitir({ tipo: 'inicio', modelo: 'claude-sonnet-5-5 · low' }, 100);
+  respuesta.split(' ').forEach((w, i) => emitir({ tipo: 'delta', texto: `${w} ` }, 250 + i * 35));
+  emitir({ tipo: 'fin', texto: respuesta, ms: 1400 }, 300 + respuesta.split(' ').length * 35);
+}
+
 export const api = {
+  chatEnviar: (p: { conv: string; texto?: string; tarea?: { accion: string; ref: string } }): void => {
+    if (enElectron) void inv('chat:enviar', p);
+    else chatDemo(p);
+  },
+  chatNueva: (conv: string): Promise<void> => (enElectron ? inv('chat:nueva', conv) : Promise.resolve()),
+  alChat: (cb: (e: EventoChat) => void): (() => void) => {
+    if (enElectron) return window.hilo!.alChat((e) => cb(e as EventoChat));
+    oyentesChat.add(cb);
+    return () => void oyentesChat.delete(cb);
+  },
   conexion: (): Promise<Conexion> =>
     enElectron ? inv('conexion:estado') : Promise.resolve({ github: { conectado: true, login: 'aleelezz', nombre: 'Jimmy Galo' }, clickup: { conectado: true, usuario: 'JIMMY ALEJANDRO GALO HERNANDEZ' }, repos: ['Nell16/sistema-evaluaciones'], repo: 'Nell16/sistema-evaluaciones', avisos: true }),
   githubToken: (t: string): Promise<{ login: string; nombre: string }> => inv('github:token', t),

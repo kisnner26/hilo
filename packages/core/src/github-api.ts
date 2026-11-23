@@ -149,6 +149,14 @@ export class GitHubApi {
     return { rama: meta.head.ref, titulo: meta.title, cuerpo: meta.body ?? '', archivos, etiquetas: meta.labels.map((l) => l.name) };
   }
 
+  /** Diff del PR recortado a `maxLineas`, para que el asistente lo revise sin gastar de más. */
+  async diff(repo: string, numero: number | string, maxLineas = 300): Promise<string> {
+    const r = await this.fetchFn(`${this.base}/repos/${repo}/pulls/${numero}`, { headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github.v3.diff', 'User-Agent': 'hilo' } });
+    if (!r.ok) throw new ErrorGithub(r.status, `GitHub respondió ${r.status} al pedir el diff.`);
+    const lineas = (await r.text()).split('\n');
+    return lineas.length <= maxLineas ? lineas.join('\n') : `${lineas.slice(0, maxLineas).join('\n')}\n[... ${lineas.length - maxLineas} líneas más ...]`;
+  }
+
   /** Publica un comentario. Quien llama debe haber obtenido antes la aprobación de una persona. */
   async comentar(repo: string, numero: number | string, texto: string): Promise<string> {
     const r = await this.pedir<{ html_url: string }>(`/repos/${repo}/issues/${numero}/comments`, { method: 'POST', body: { body: texto } });

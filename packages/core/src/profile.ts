@@ -38,7 +38,7 @@ export interface Perfil {
   evidencia: { campos: string[] };
   roles: Record<RolId, { puede: string[]; noPuede: string[] }>;
   integradores: string[];
-  modelos: Record<'orquestador' | 'desarrollo' | 'documentacion' | 'integracion' | 'testing', ModeloAsignado>;
+  modelos: Record<'orquestador' | 'desarrollo' | 'documentacion' | 'integracion' | 'testing' | 'asistente', ModeloAsignado>;
 }
 
 /** Sustituye {codigo} por el código de tarea ya escapado, para armar expresiones regulares. */

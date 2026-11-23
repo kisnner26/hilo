@@ -39,6 +39,8 @@ const CANALES = [
   'diagnostico:correr',
   'contexto:resumen',
   'contexto:sesion-nueva',
+  'chat:enviar',
+  'chat:nueva',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
@@ -50,6 +52,11 @@ contextBridge.exposeInMainWorld('hilo', {
     const f = (_: unknown, e: unknown) => cb(e);
     ipcRenderer.on('agente:evento', f);
     return () => ipcRenderer.off('agente:evento', f);
+  },
+  alChat: (cb: (e: unknown) => void) => {
+    const f = (_: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('chat:evento', f);
+    return () => ipcRenderer.off('chat:evento', f);
   },
   alCodigo: (cb: (e: unknown) => void) => {
     const f = (_: unknown, e: unknown) => cb(e);

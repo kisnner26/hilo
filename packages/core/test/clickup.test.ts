@@ -31,8 +31,19 @@ describe('cliente de ClickUp', () => {
     });
     const ts = await new ClickUp('pk_test', f).tareasDeLista('1800450000001291');
     expect(llamadas[0]?.auth).toBe('pk_test');
+    expect(llamadas[0]?.url).toContain('subtasks=true'); // sin esto ClickUp omite las subtareas, como BFA-INT-03
     expect(ts[0]).toMatchObject({ codigo: 'BFA-BE-04', estado: 'pending', asignados: ['OCTAVIO'], dependeDe: ['b2'] });
     expect(ts[0]?.vence).toBe('2026-11-24T10:00:00.000Z');
+  });
+
+  it('sigue pidiendo páginas mientras vengan llenas, aunque la API no diga last_page', async () => {
+    const pagina = (n: number, cuantas: number) => ({ tasks: Array.from({ length: cuantas }, (_, i) => ({ id: `t${n}-${i}`, name: `X-${n}${i} — t`, status: { status: 'open' }, assignees: [], dependencies: [] })) });
+    const respuestas = [pagina(0, 100), pagina(1, 100), pagina(2, 37)];
+    let i = 0;
+    const f = async () => ({ ok: true, status: 200, json: async () => respuestas[i++], text: async () => '' });
+    const ts = await new ClickUp('t', f as never).tareasDeLista('l');
+    expect(ts).toHaveLength(237);
+    expect(i).toBe(3);
   });
 
   it('publica un comentario con el cuerpo exacto y sin notificar a todos', async () => {

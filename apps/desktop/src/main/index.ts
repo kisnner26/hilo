@@ -1,5 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
@@ -333,6 +334,103 @@ function registrarIpcExtra(): void {
 }
 
 
+
+// ---------- Chat libre ----------
+
+interface Conversacion {
+  sesion: string;
+  creada: boolean;
+}
+const conversaciones = new Map<string, Conversacion>();
+let diaCache: { hasta: number; dia: core.MiDia } | undefined;
+
+async function diaCacheado(forzar = false): Promise<core.MiDia> {
+  if (!forzar && diaCache && diaCache.hasta > Date.now()) return diaCache.dia;
+  const { dia } = await calcularMiDia();
+  diaCache = { hasta: Date.now() + 90_000, dia };
+  return dia;
+}
+
+interface PedidoChat {
+  conv: string;
+  texto?: string;
+  tarea?: { accion: core.AccionTarea; ref: string };
+}
+
+async function turnoDeChat(p: PedidoChat): Promise<void> {
+  const emitir = (e: Record<string, unknown>) => enviar('chat:evento', { conv: p.conv, ...e });
+  try {
+    const perfil = perfilActual();
+    const cfg = leerConfig();
+    const repo = repoActivo();
+    const dia = await diaCacheado(!conversaciones.has(p.conv));
+
+    // Lo que se contesta con datos que ya tenemos no gasta tokens.
+    if (!p.tarea && p.texto) {
+      const intencion = core.detectarIntencion(p.texto);
+      if (intencion) {
+        emitir({ tipo: 'respuesta', ...core.respuestaDeIntencion(intencion, dia) });
+        return;
+      }
+    }
+
+    let conv = conversaciones.get(p.conv);
+    if (!conv) {
+      conv = { sesion: randomUUID(), creada: false };
+      conversaciones.set(p.conv, conv);
+    }
+    const { grafo, notas } = cargarTodo();
+    let prompt = p.texto ?? '';
+    if (p.tarea) {
+      const { accion } = p.tarea;
+      const numero = /^\d+$/.test(p.tarea.ref) ? Number(p.tarea.ref) : undefined;
+      const prPorNumero = numero !== undefined ? dia.prs.find((x) => x.numero === numero) : undefined;
+      // Si el botón viene de un PR, la tarea es la del código del título: "[INT-02] ..." es INT-02.
+      const ref = prPorNumero ? (core.codigoDeTitulo(prPorNumero.titulo) ?? p.tarea.ref) : p.tarea.ref;
+      const tarea = dia.tareas.find((t) => t.codigo === ref);
+      const pr = prPorNumero ?? dia.prs.find((x) => new RegExp(`^\\[${ref}\\]`).test(x.titulo));
+      const cu = clickup();
+      const detalle = tarea && cu ? await cu.detalleTarea(tarea.id).catch(() => undefined) : undefined;
+      let informe: string | undefined;
+      let diff: string | undefined;
+      if (accion === 'revisar' && pr) {
+        const gh = await github();
+        if (gh) {
+          informe = core.formatearInforme(core.informe(await gh.api.cambioDePr(repo, pr.numero), perfil));
+          diff = await gh.api.diff(repo, pr.numero, 300).catch(() => undefined);
+        }
+      }
+      prompt = core.promptTarea(accion, ref, detalle, pr, informe, diff);
+    } else if (notas.length > 0 && p.texto) {
+      const extra = core.buscarNotas(notas, p.texto, 2).map((x) => `## ${x.nota.titulo}\n${core.extractoRelevante(x.nota.texto, p.texto!, 700)}`).join('\n\n');
+      if (extra) prompt = `${p.texto}\n\n[Notas del proyecto que pueden ayudar]\n${extra}`;
+    }
+
+    const sistema = core.promptSistemaChat(perfil, dia, core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }), repo);
+    const asignado = perfil.modelos.asistente;
+    const cwd = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : (cfg.boveda ?? raizDatos());
+    emitir({ tipo: 'inicio', modelo: `${asignado.modelo} · ${asignado.esfuerzo}` });
+    const r = await core.ejecutar({
+      asignado,
+      sistema: asignado.cli === 'claude' ? sistema : undefined,
+      prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`,
+      cwd,
+      soloLectura: true,
+      ...(asignado.cli === 'claude' ? { sesion: { id: conv.sesion, reanudar: conv.creada } } : {}),
+      alTexto: (delta) => emitir({ tipo: 'delta', texto: delta }),
+    });
+    if (r.codigoSalida !== 0 && !r.texto) {
+      conv.sesion = randomUUID();
+      emitir({ tipo: 'error', texto: `El agente terminó con código ${r.codigoSalida}. Revisa en Ajustes que tu suscripción esté conectada.` });
+      return;
+    }
+    conv.creada = true;
+    emitir({ tipo: 'fin', texto: r.texto, ms: r.duracionMs });
+  } catch (e) {
+    emitir({ tipo: 'error', texto: core.errorLegible(e, 'claude') });
+  }
+}
+
 // ---------- Diagnóstico ----------
 
 interface Prueba {
@@ -560,6 +658,11 @@ function registrarIpcConexiones(): void {
     guardarConfig(rol ? { ...resto, rol } : resto);
   });
   ipcMain.handle('midia:cargar', () => calcularMiDia());
+  ipcMain.handle('chat:enviar', (_e, p: PedidoChat) => void turnoDeChat(p));
+  ipcMain.handle('chat:nueva', (_e, conv: string) => {
+    conversaciones.delete(conv);
+    diaCache = undefined;
+  });
   ipcMain.handle('diagnostico:correr', () => diagnosticar());
   ipcMain.handle('instalaciones:conteo', async () => {
     const repo = leerConfig().repoHilo ?? 'kisnner26/hilo';

@@ -73,8 +73,8 @@ export class ClickUp {
 
   async tareasDeLista(listaId: string, incluirCerradas = false): Promise<TareaClickup[]> {
     const salida: TareaClickup[] = [];
-    for (let pagina = 0; pagina < 20; pagina++) {
-      const r = await this.pedir<{ tasks: Record<string, unknown>[]; last_page?: boolean }>(`/list/${listaId}/task?page=${pagina}&include_closed=${incluirCerradas}`);
+    for (let pagina = 0; pagina < 30; pagina++) {
+      const r = await this.pedir<{ tasks: Record<string, unknown>[]; last_page?: boolean }>(`/list/${listaId}/task?page=${pagina}&include_closed=${incluirCerradas}&subtasks=true`);
       for (const t of r.tasks) {
         const nombre = String(t.name ?? '');
         const deps = (t.dependencies as { task_id: string; depends_on: string }[] | undefined) ?? [];
@@ -90,9 +90,17 @@ export class ClickUp {
           dependeDe: deps.filter((d) => d.task_id === String(t.id)).map((d) => d.depends_on),
         });
       }
-      if (r.last_page !== false || r.tasks.length === 0) break;
+      // ClickUp entrega hasta 100 tareas por página: se sigue mientras la página venga llena, aunque no diga last_page.
+      if (r.last_page === true || r.tasks.length < 100) break;
     }
     return salida;
+  }
+
+  /** Descripción y últimos comentarios de una tarea, para que el asistente la explique con datos reales. */
+  async detalleTarea(tareaId: string): Promise<{ nombre: string; estado: string; descripcion: string; comentarios: { autor: string; texto: string }[] }> {
+    const t = await this.pedir<{ name: string; status?: { status?: string }; markdown_description?: string; text_content?: string }>(`/task/${tareaId}?include_markdown_description=true`);
+    const cs = await this.comentarios(tareaId).catch(() => []);
+    return { nombre: t.name, estado: t.status?.status ?? '', descripcion: t.markdown_description ?? t.text_content ?? '', comentarios: cs.slice(0, 5).map((c) => ({ autor: c.autor, texto: c.texto })) };
   }
 
   async comentarios(tareaId: string): Promise<ComentarioClickup[]> {
