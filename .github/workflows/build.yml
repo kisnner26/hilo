@@ -1,17 +1,40 @@
-name: build
+name: release
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: Etiqueta del release (por ejemplo v0.1.0)
+        required: true
+
+permissions:
+  contents: write
 
 jobs:
+  crear:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          gh release view "$ETIQUETA" >/dev/null 2>&1 \
+            || gh release create "$ETIQUETA" --title "Hilo $ETIQUETA" --notes-file docs/notas-release.md
+
   paquete:
+    needs: crear
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,14 +45,8 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run dist -w @hilo/desktop
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hilo-${{ matrix.os }}
-          path: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.zip
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
+      - name: Subir al release
+        shell: bash
+        run: |
+          find apps/desktop/release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -print0 \
+            | xargs -0 gh release upload "$ETIQUETA" --clobber

@@ -29,6 +29,6 @@ el recorte de alcance lo decide el equipo, no la herramienta. hilo solo muestra 
 
 ## lo que hilo no hace todavía
 
-- publicar comentarios en clickup por api: hoy genera el texto y la persona lo pega.
-- leer el estado de clickup para armar el plan solo: el plan parte de un json de tareas.
+- asignar tareas ni cambiar estados de clickup solo: publica comentarios con tu confirmación, nada más.
+- estimar líneas reales: el plan usa estimaciones por tipo de tarea.
 - instalarse con un clic en windows y linux: el flujo de construcción está en `.github/workflows/build.yml` y no se ejecutó.

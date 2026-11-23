@@ -16,6 +16,16 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 
 ![revisar un pr](docs/img/revisar.png)
 
+## conectar y empezar
+
+abre la app y conecta tus cuentas, una sola vez:
+
+1. **github:** el botón abre el navegador y te da un código. hilo no ve tu contraseña (usa `gh`).
+2. **clickup:** pega tu token de api (tu foto, configuración, apps). se guarda cifrado con el llavero del sistema.
+3. **repositorio:** agrega cualquiera con `dueño/nombre` o su dirección.
+
+con eso hilo sabe quién eres y la pantalla **mi día** muestra tus tareas, tus pr y qué hacer ahora, con el comentario de entrega ya preparado. los avisos automáticos (ci roto, cambios pedidos, tarea vencida) se activan en ajustes.
+
 ## usar
 
 requisitos: node 22 o superior, `gh` con sesión y claude code con sesión (`claude auth login`).
