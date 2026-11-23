@@ -11,3 +11,4 @@ export * from './agentes.js';
 export * from './github.js';
 export * from './roles.js';
 export * from './clickup.js';
+export * from './midia.js';

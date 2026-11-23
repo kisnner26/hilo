@@ -8,6 +8,7 @@ export interface TareaClickup {
   estado: string;
   lista: string;
   asignados: string[];
+  asignadosIds?: number[];
   vence?: string;
   /** ids de las tareas de las que esta depende */
   dependeDe: string[];
@@ -54,6 +55,22 @@ export class ClickUp {
     return { id: r.user.id, usuario: r.user.username };
   }
 
+  /** Todas las listas a las que la persona tiene acceso, para elegir cuáles seguir. */
+  async listas(): Promise<{ id: string; nombre: string; espacio: string }[]> {
+    const equipos = (await this.pedir<{ teams: { id: string }[] }>('/team')).teams;
+    const salida: { id: string; nombre: string; espacio: string }[] = [];
+    for (const e of equipos) {
+      const espacios = (await this.pedir<{ spaces: { id: string; name: string }[] }>(`/team/${e.id}/space?archived=false`)).spaces;
+      for (const sp of espacios) {
+        const sueltas = (await this.pedir<{ lists: { id: string; name: string }[] }>(`/space/${sp.id}/list?archived=false`)).lists;
+        for (const l of sueltas) salida.push({ id: l.id, nombre: l.name, espacio: sp.name });
+        const carpetas = (await this.pedir<{ folders: { lists: { id: string; name: string }[] }[] }>(`/space/${sp.id}/folder?archived=false`)).folders;
+        for (const c of carpetas) for (const l of c.lists) salida.push({ id: l.id, nombre: l.name, espacio: sp.name });
+      }
+    }
+    return salida;
+  }
+
   async tareasDeLista(listaId: string, incluirCerradas = false): Promise<TareaClickup[]> {
     const salida: TareaClickup[] = [];
     for (let pagina = 0; pagina < 20; pagina++) {
@@ -68,6 +85,7 @@ export class ClickUp {
           estado: String((t.status as { status?: string } | undefined)?.status ?? ''),
           lista: listaId,
           asignados: ((t.assignees as { username: string }[] | undefined) ?? []).map((a) => a.username),
+          asignadosIds: ((t.assignees as { id: number }[] | undefined) ?? []).map((a) => Number(a.id)),
           ...(t.due_date ? { vence: new Date(Number(t.due_date)).toISOString() } : {}),
           dependeDe: deps.filter((d) => d.task_id === String(t.id)).map((d) => d.depends_on),
         });

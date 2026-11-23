@@ -57,3 +57,53 @@ export function colaDePrs(repo: string, integradores: string[]): PrEnCola[] {
     };
   });
 }
+
+import { estadoCi, type PrResumen } from './midia.js';
+
+export function usuarioGithub(): { login: string; nombre: string } | undefined {
+  try {
+    const [login, nombre] = gh('api', 'user', '--jq', '[.login, (.name // "")] | @tsv').trim().split('\t');
+    return login ? { login, nombre: nombre ?? '' } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function repoValido(repo: string): boolean {
+  try {
+    gh('repo', 'view', repo, '--json', 'name');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** PR abiertos con su estado de CI y de revisión, y si piden la revisión de `yo`. */
+export function prsAbiertos(repo: string, yo?: string): PrResumen[] {
+  const crudo = JSON.parse(
+    gh('pr', 'list', '-R', repo, '--state', 'open', '--limit', '80', '--json', 'number,title,author,headRefName,isDraft,url,mergeStateStatus,reviewDecision,reviewRequests,statusCheckRollup'),
+  ) as {
+    number: number;
+    title: string;
+    author: { login: string };
+    headRefName: string;
+    isDraft: boolean;
+    url: string;
+    mergeStateStatus: string;
+    reviewDecision: string;
+    reviewRequests: { login?: string }[];
+    statusCheckRollup: { name: string; conclusion?: string; status?: string }[];
+  }[];
+  return crudo.map((p) => ({
+    numero: p.number,
+    titulo: p.title,
+    autor: p.author.login,
+    rama: p.headRefName,
+    borrador: p.isDraft,
+    url: p.url,
+    ci: estadoCi(p.statusCheckRollup ?? []),
+    revision: p.reviewDecision === 'APPROVED' ? 'aprobado' : p.reviewDecision === 'CHANGES_REQUESTED' ? 'cambios' : p.reviewDecision === 'REVIEW_REQUIRED' ? 'requerida' : 'ninguna',
+    estadoFusion: p.mergeStateStatus,
+    pidenMiRevision: Boolean(yo && p.reviewRequests.some((r) => r.login === yo)),
+  }));
+}
