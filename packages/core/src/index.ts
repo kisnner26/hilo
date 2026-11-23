@@ -10,3 +10,4 @@ export * from './xp.js';
 export * from './agentes.js';
 export * from './github.js';
 export * from './roles.js';
+export * from './clickup.js';

@@ -43,6 +43,33 @@ export function cargarGrafo(ruta: string): Grafo {
   };
 }
 
+/**
+ * Nombre legible de cada comunidad: la carpeta (últimos dos tramos) donde más archivos suyos viven.
+ * Los nombres que trae graphify suelen ser frases largas; sin archivos se conserva el nombre original.
+ */
+export function nombrarComunidades(g: Grafo): Grafo {
+  const porCom = new Map<number, Nodo[]>();
+  for (const n of g.nodos) porCom.set(n.comunidad ?? 0, [...(porCom.get(n.comunidad ?? 0) ?? []), n]);
+  const nombres = new Map<number, string>();
+  const usados = new Map<string, number>();
+  for (const [c, nodos] of [...porCom.entries()].sort((a, b) => b[1].length - a[1].length)) {
+    const cuenta = new Map<string, number>();
+    for (const n of nodos) {
+      const partes = (n.archivo ?? '').split('/').slice(0, -1).filter((x) => x && x !== 'repo' && x !== 'src');
+      if (partes.length === 0) continue;
+      const clave = partes.slice(-2).join('/');
+      cuenta.set(clave, (cuenta.get(clave) ?? 0) + 1);
+    }
+    const mejor = [...cuenta.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    let nombre = mejor ?? nodos[0]?.nombreComunidad ?? `comunidad ${c}`;
+    const veces = (usados.get(nombre) ?? 0) + 1;
+    usados.set(nombre, veces);
+    if (veces > 1) nombre = `${nombre} ${veces}`;
+    nombres.set(c, nombre);
+  }
+  return { ...g, nodos: g.nodos.map((n) => ({ ...n, nombreComunidad: nombres.get(n.comunidad ?? 0) ?? n.nombreComunidad })) };
+}
+
 // ---------- Bóveda de Markdown ----------
 
 export interface Nota {

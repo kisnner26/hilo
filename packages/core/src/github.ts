@@ -24,3 +24,36 @@ export function cambioDePr(numero: string | number, repo: string): Cambio {
   ) as Cambio['archivos'];
   return { rama: meta.headRefName, titulo: meta.title, cuerpo: meta.body ?? '', archivos, etiquetas: meta.labels.map((l) => l.name) };
 }
+
+import type { PrEnCola } from './balance.js';
+
+/**
+ * Cola de PR abiertos para repartir entre integradores.
+ * `rondas` es una aproximación: comentarios y revisiones de integradores en ese PR.
+ */
+export function colaDePrs(repo: string, integradores: string[]): PrEnCola[] {
+  const abiertos = JSON.parse(gh('pr', 'list', '-R', repo, '--state', 'open', '--limit', '60', '--json', 'number,author,isDraft,additions,deletions')) as {
+    number: number;
+    author: { login: string };
+    isDraft: boolean;
+    additions: number;
+    deletions: number;
+  }[];
+  return abiertos.map((p) => {
+    const voces = (ruta: string): string[] => {
+      try {
+        return JSON.parse(gh('api', ruta, '--paginate', '--jq', '[.[]|.user.login]')) as string[];
+      } catch {
+        return [];
+      }
+    };
+    const dichas = [...voces(`repos/${repo}/issues/${p.number}/comments`), ...voces(`repos/${repo}/pulls/${p.number}/reviews`)];
+    return {
+      numero: p.number,
+      autor: p.author.login,
+      rondas: dichas.filter((u) => integradores.includes(u)).length,
+      lineas: p.additions + p.deletions,
+      listo: !p.isDraft,
+    };
+  });
+}
