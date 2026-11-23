@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Conexiones } from './Conexiones';
-import { api, type Config, type EstadoSesion, type EventoAgente, type Funcion, type HiloVista, type Informe, type ModeloAsignado, type PerfilVista } from '../lib/api';
+import { api, type PaqueteVista, type Config, type EstadoSesion, type EventoAgente, type Funcion, type HiloVista, type Informe, type ModeloAsignado, type PerfilVista } from '../lib/api';
 import { mdAHtml } from '../lib/markdown';
 import type { NodoVista } from '../lib/galaxy';
 
@@ -150,6 +150,62 @@ export function RevisarPanel({ inicial = '' }: { inicial?: string }) {
 
 // ---------- Agentes ----------
 
+function AhorroTokens() {
+  const [r, setR] = useState<PaqueteVista | null>(null);
+  const [hilos, setHilos] = useState<HiloVista[]>([]);
+  const [hilo, setHilo] = useState('');
+  const [copiado, setCopiado] = useState('');
+  useEffect(() => void api.hilos().then(setHilos), []);
+  const copiar = async (que: string, t: string) => {
+    await api.copiar(t);
+    setCopiado(que);
+  };
+  return (
+    <section className="tarjeta">
+      <header>
+        <b>Ahorro de tokens</b>
+      </header>
+      <p className="suave">
+        En vez de mandar el proyecto entero, se manda un mapa corto, solo la vecindad de lo que importa y el hilo de la tarea. Las notas se recortan a los párrafos que tocan la consulta y los logs se comprimen.
+      </p>
+      <div className="fila">
+        <button
+          className="boton secundario"
+          onClick={async () => {
+            const x = await api.resumen();
+            setR(x);
+            await copiar('resumen', x.texto);
+          }}
+        >
+          {copiado === 'resumen' ? 'Resumen copiado' : 'Copiar resumen del proyecto'}
+        </button>
+        <select className="campo corto" value={hilo} onChange={(e) => setHilo(e.target.value)}>
+          <option value="">Sin hilo</option>
+          {hilos.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.id}
+            </option>
+          ))}
+        </select>
+        <button
+          className="boton secundario"
+          onClick={async () => {
+            const x = await api.sesionNueva(hilo || undefined);
+            await copiar('sesion', x.texto);
+          }}
+        >
+          {copiado === 'sesion' ? 'Sesión copiada' : 'Copiar sesión nueva'}
+        </button>
+      </div>
+      {r && (
+        <p className="bien">
+          ~{r.tokens.toLocaleString('es')} tokens en vez de ~{r.tokensTodo.toLocaleString('es')}: {Math.round(r.ahorro * 100)} % menos. Tokens estimados (caracteres entre 4).
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function AgentesPanel({ perfil }: { perfil: PerfilVista | null }) {
   const [objetivo, setObjetivo] = useState('');
   const [rol, setRol] = useState<(typeof ROLES)[number]>('desarrollador');
@@ -195,6 +251,7 @@ export function AgentesPanel({ perfil }: { perfil: PerfilVista | null }) {
           Orquestador: {MODELOS.find((m) => m.id === perfil.modelos.orquestador.modelo)?.nombre} · {NOMBRE_ESFUERZO[perfil.modelos.orquestador.esfuerzo]}. Subagente de {rol}: {MODELOS.find((m) => m.id === perfil.modelos[rol === 'desarrollador' ? 'desarrollo' : rol === 'documentador' ? 'documentacion' : rol === 'tester' ? 'testing' : 'integracion'].modelo)?.nombre}.
         </p>
       )}
+      <AhorroTokens />
       <div className="registro">
         {eventos.length === 0 && <p className="suave">Sin ejecuciones todavía.</p>}
         {eventos.map((e, i) => (

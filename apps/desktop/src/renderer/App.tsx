@@ -31,7 +31,7 @@ function Inspector({ nodo, cerrar }: { nodo: NodoVista; cerrar: () => void }) {
   useEffect(() => {
     setInfo(null);
     setCopiado(false);
-    void api.contexto({ alcance: { tipo: 'vecindad', nodo: nodo.id, saltos: 2 }, conciso: true, sinRuido: true }).then((p) => setInfo({ tokens: p.tokens, nodos: p.nodos }));
+    void api.contexto({ alcance: { tipo: 'vecindad', nodo: nodo.id, saltos: 2 }, conciso: true, sinRuido: true }).then((p) => setInfo({ tokens: p.tokens, nodos: p.nodos ?? 0 }));
   }, [nodo]);
   return (
     <aside className="inspector">

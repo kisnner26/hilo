@@ -60,12 +60,27 @@ export interface EventoAgente {
 }
 
 export interface Conexion {
-  github: { conectado: boolean; login?: string; nombre?: string };
+  github: { conectado: boolean; login?: string; nombre?: string; origen?: 'gh' | 'token'; ghInstalado?: boolean; error?: string };
   clickup: { conectado: boolean; usuario?: string; error?: string };
   repos: string[];
   repo: string;
   avisos: boolean;
   rol?: string;
+}
+export interface Prueba {
+  grupo: string;
+  nombre: string;
+  estado: 'ok' | 'aviso' | 'error';
+  detalle: string;
+  ayuda?: string;
+}
+export interface PaqueteVista {
+  texto: string;
+  tokens: number;
+  tokensTodo: number;
+  ahorro: number;
+  nodos?: number;
+  recortado?: boolean;
 }
 export interface TareaVista {
   id: string;
@@ -165,6 +180,18 @@ const DEMO_DIA: MiDiaVista = {
 export const api = {
   conexion: (): Promise<Conexion> =>
     enElectron ? inv('conexion:estado') : Promise.resolve({ github: { conectado: true, login: 'aleelezz', nombre: 'Jimmy Galo' }, clickup: { conectado: true, usuario: 'JIMMY ALEJANDRO GALO HERNANDEZ' }, repos: ['Nell16/sistema-evaluaciones'], repo: 'Nell16/sistema-evaluaciones', avisos: true }),
+  githubToken: (t: string): Promise<{ login: string; nombre: string }> => inv('github:token', t),
+  githubBorrarToken: (): Promise<void> => inv('github:borrar-token'),
+  diagnostico: (): Promise<Prueba[]> =>
+    enElectron
+      ? inv('diagnostico:correr')
+      : Promise.resolve([
+          { grupo: 'Herramientas', nombre: 'GitHub CLI', estado: 'ok', detalle: '/opt/homebrew/bin/gh' },
+          { grupo: 'GitHub', nombre: 'Cuenta', estado: 'ok', detalle: 'aleelezz · token de gh' },
+          { grupo: 'ClickUp', nombre: 'Cuenta', estado: 'error', detalle: 'Sin conectar.', ayuda: 'Pega tu token personal en Ajustes, Conexiones.' },
+        ]),
+  resumen: (): Promise<PaqueteVista> => (enElectron ? inv('contexto:resumen') : Promise.resolve({ texto: '## Resumen del proyecto (demo)', tokens: 420, tokensTodo: 9800, ahorro: 0.96 })),
+  sesionNueva: (hiloId?: string): Promise<{ texto: string; tokens: number }> => (enElectron ? inv('contexto:sesion-nueva', hiloId) : Promise.resolve({ texto: 'demo', tokens: 10 })),
   conectarGithub: (): Promise<{ login?: string }> => inv('github:conectar'),
   alCodigo: (cb: (e: { codigo: string; url: string }) => void): (() => void) => (enElectron ? window.hilo!.alCodigo((e) => cb(e as { codigo: string; url: string })) : () => {}),
   agregarRepo: (t: string): Promise<string[]> => inv('repos:agregar', t),
@@ -232,8 +259,8 @@ export const api = {
         }),
   hilos: (): Promise<HiloVista[]> => (enElectron ? inv('hilos:lista') : Promise.resolve([])),
   guardarHilo: (h: HiloVista): Promise<HiloVista[]> => inv('hilos:guardar', h),
-  contexto: (o: unknown): Promise<{ texto: string; tokens: number; nodos: number; recortado: boolean }> =>
-    enElectron ? inv('contexto:paquete', o) : Promise.resolve({ texto: '## Contexto del grafo\n- (demo)', tokens: 12, nodos: 1, recortado: false }),
+  contexto: (o: unknown): Promise<PaqueteVista> =>
+    enElectron ? inv('contexto:paquete', o) : Promise.resolve({ texto: '## Contexto del grafo\n- (demo)', tokens: 573, tokensTodo: 9800, ahorro: 0.94, nodos: 23, recortado: false }),
   copiar: (t: string): Promise<void> => (enElectron ? inv('portapapeles:copiar', t) : navigator.clipboard.writeText(t)),
   orquestar: (p: { objetivo: string; rol: string; hiloId?: string }): void => {
     if (enElectron) void inv('agentes:orquestar', p);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Conexion, type InstalacionesVista } from '../lib/api';
+import { api, type Conexion, type InstalacionesVista, type Prueba } from '../lib/api';
 
 /** Conecta las cuentas de la persona. Con GitHub y ClickUp conectados, Hilo sabe quién es y qué le toca. */
 export function Conexiones({ alCambiar }: { alCambiar: () => void }) {
@@ -12,6 +12,8 @@ export function Conexiones({ alCambiar }: { alCambiar: () => void }) {
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [instal, setInstal] = useState<InstalacionesVista | null>(null);
   const [ocupado, setOcupado] = useState('');
+  const [tokenGh, setTokenGh] = useState('');
+  const [pruebas, setPruebas] = useState<Prueba[] | null>(null);
 
   const cargar = () => void api.conexion().then(setC);
   useEffect(() => {
@@ -38,20 +40,53 @@ export function Conexiones({ alCambiar }: { alCambiar: () => void }) {
       <section className="conexion">
         <header>
           <b>GitHub</b>
-          <span className={c.github.conectado ? 'bien' : 'mal'}>{c.github.conectado ? `Conectado como ${c.github.login}` : 'Sin conectar'}</span>
+          <span className={c.github.conectado ? 'bien' : 'mal'}>{c.github.conectado ? `Conectado como ${c.github.login}${c.github.origen === 'token' ? ' · token' : ' · gh'}` : 'Sin conectar'}</span>
         </header>
         {!c.github.conectado && (
           <>
-            <p className="suave">Se abre el navegador para que autorices con tu cuenta. Hilo no ve tu contraseña.</p>
-            <button className="boton" disabled={ocupado === 'gh'} onClick={() => void correr('gh', () => api.conectarGithub())}>
-              {ocupado === 'gh' ? 'Esperando autorización…' : 'Conectar GitHub'}
-            </button>
-            {codigo && ocupado === 'gh' && (
-              <p className="codigo">
-                Escribe este código en {codigo.url}: <strong>{codigo.codigo}</strong>
-              </p>
+            {c.github.error && <p className="error">{c.github.error}</p>}
+            {c.github.ghInstalado ? (
+              <>
+                <p className="suave">Se abre el navegador para que autorices con tu cuenta. Hilo no ve tu contraseña.</p>
+                <button className="boton" disabled={ocupado === 'gh'} onClick={() => void correr('gh', () => api.conectarGithub())}>
+                  {ocupado === 'gh' ? 'Esperando autorización…' : 'Conectar GitHub'}
+                </button>
+                {codigo && ocupado === 'gh' && (
+                  <p className="codigo">
+                    Escribe este código en {codigo.url}: <strong>{codigo.codigo}</strong>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mal">GitHub CLI (gh) no está instalado. Instálalo (macOS: brew install gh · Windows: winget install GitHub.cli) o usa un token personal, aquí abajo.</p>
             )}
+            <details className="token-gh">
+              <summary>Usar un token personal de GitHub</summary>
+              <p className="suave">
+                En github.com, Settings, Developer settings, Personal access tokens. Permisos: Contents y Metadata en lectura, y Pull requests en lectura y escritura sobre el repositorio. Se guarda cifrado con el llavero.
+              </p>
+              <div className="fila">
+                <input className="campo" type="password" placeholder="github_pat_… o ghp_…" value={tokenGh} onChange={(e) => setTokenGh(e.target.value)} />
+                <button
+                  className="boton secundario"
+                  disabled={!tokenGh || ocupado === 'ghtoken'}
+                  onClick={() =>
+                    void correr('ghtoken', async () => {
+                      await api.githubToken(tokenGh);
+                      setTokenGh('');
+                    })
+                  }
+                >
+                  Guardar token
+                </button>
+              </div>
+            </details>
           </>
+        )}
+        {c.github.conectado && c.github.origen === 'token' && (
+          <button className="boton secundario" onClick={() => void correr('ghtoken', () => api.githubBorrarToken())}>
+            Quitar el token guardado
+          </button>
         )}
         <h4>Repositorios</h4>
         <div className="lista-repos">
@@ -152,6 +187,30 @@ export function Conexiones({ alCambiar }: { alCambiar: () => void }) {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      <section className="conexion">
+        <header>
+          <b>Diagnóstico</b>
+          <span className="suave">comprueba cada conexión de punta a punta</span>
+        </header>
+        <button className="boton secundario" disabled={ocupado === 'diag'} onClick={() => void correr('diag', async () => setPruebas(await api.diagnostico()))}>
+          {ocupado === 'diag' ? 'Probando…' : 'Probar todas las conexiones'}
+        </button>
+        {pruebas && (
+          <ul className="diagnostico">
+            {pruebas.map((p, i) => (
+              <li key={i} className={`diag-${p.estado}`}>
+                <span className="diag-marca">{p.estado === 'ok' ? 'OK' : p.estado === 'aviso' ? 'AVISO' : 'FALLA'}</span>
+                <span className="diag-grupo">{p.grupo}</span>
+                <span>
+                  <b>{p.nombre}</b> · {p.detalle}
+                  {p.ayuda && <em>{p.ayuda}</em>}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

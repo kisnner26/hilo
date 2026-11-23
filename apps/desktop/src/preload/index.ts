@@ -34,6 +34,11 @@ const CANALES = [
   'rol:fijar',
   'midia:cargar',
   'instalaciones:conteo',
+  'github:token',
+  'github:borrar-token',
+  'diagnostico:correr',
+  'contexto:resumen',
+  'contexto:sesion-nueva',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {

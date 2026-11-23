@@ -11,6 +11,8 @@ interface Config {
   perfil?: string;
   grafo?: string;
   boveda?: string;
+  /** Clon local del repositorio: es donde trabajan los agentes para poder leer el código. */
+  proyecto?: string;
   raiz?: string;
   repo?: string;
   /** Modelo y esfuerzo por función; si falta una, se usa la del perfil. */
@@ -21,6 +23,8 @@ interface Config {
   rol?: core.RolId;
   /** Token personal de ClickUp, cifrado con el llavero del sistema. */
   clickupToken?: string;
+  /** Token personal de GitHub pegado a mano (si no, se usa el de `gh`), cifrado con el llavero. */
+  githubToken?: string;
   /** Repositorios conectados (dueño/nombre); `repo` es el activo. */
   repos?: string[];
   /** Listas de ClickUp que se siguen. Si no hay, se usan las del perfil. */
@@ -29,6 +33,10 @@ interface Config {
   /** Repositorio donde se publican los releases de Hilo, para contar descargas. */
   repoHilo?: string;
 }
+
+// Una app abierta desde el Dock no hereda el PATH de la terminal: sin esto no se encuentran gh, claude ni codex.
+core.prepararPath();
+void core.ampliarPath();
 
 app.setName('Hilo');
 const rutaConfig = () => join(app.getPath('userData'), 'config.json');
@@ -100,7 +108,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
   const cfg = leerConfig();
   const { grafo, notas } = cargarTodo();
   const raiz = raizDatos();
-  const cwd = cfg.boveda ?? raiz;
+  const cwd = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : (cfg.boveda ?? raiz);
   const soloLectura = !cfg.permitirEditar;
   const hilo = p.hiloId ? core.cargarHilo(raiz, p.hiloId) : undefined;
   const recuerdo = hilo ? core.recordatorio(hilo) : `# Hilo nuevo — rol ${p.rol}\nObjetivo: ${p.objetivo}`;
@@ -109,7 +117,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
     const paquete = core.paqueteDeContexto(grafo, { alcance: { tipo: 'todo' }, rol, conciso: true, sinRuido: true, presupuesto, consulta });
     const extra = core
       .buscarNotas(notas, consulta, 3)
-      .map((x) => `\n## ${x.nota.titulo} (${x.nota.ruta})\n${x.nota.texto.slice(0, 1000)}`)
+      .map((x) => `\n## ${x.nota.titulo} (${x.nota.ruta})\n${core.extractoRelevante(x.nota.texto, consulta, 1000)}`)
       .join('\n');
     return paquete.texto + extra;
   };
@@ -118,7 +126,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
   const plan = await core.ejecutar({
     asignado: perfil.modelos.orquestador,
     sistema: 'Eres el orquestador. Solo planificas. No inventes datos; si falta información, crea una subtarea que la pida.',
-    prompt: `${recuerdo}\n\n${contextoPara(p.objetivo, 'integrador', 1200)}\n\n${core.promptOrquestador(p.objetivo, '')}`,
+    prompt: `${recuerdo}\n\n${core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 })}\n${contextoPara(p.objetivo, 'integrador', 700)}\n\n${core.promptOrquestador(p.objetivo, '')}`,
     cwd,
     soloLectura: true,
   });
@@ -134,7 +142,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
     enviar('agente:evento', { fase: 'subagente', rol: s.rol, estado: 'inicio', texto: s.instruccion, modelo: `${asignado.modelo} · ${asignado.esfuerzo}` });
     const r = await core.ejecutar({
       asignado,
-      sistema: core.promptDeRol(s.rol, perfil),
+      sistema: core.promptDeRol(s.rol, perfil, s.rol === 'desarrollador' || s.rol === 'tester' ? 'breve' : 'normal'),
       prompt: `${recuerdo}\n\n${contextoPara(s.consulta, s.rol, 1500)}\n\n## Tarea\n${s.instruccion}`,
       cwd,
       soloLectura: soloLectura || s.rol !== 'desarrollador',
@@ -168,13 +176,18 @@ function registrarIpc(): void {
   ipcMain.handle('notas:lista', () => cargarTodo().notas.map((n) => ({ ruta: n.ruta, titulo: n.titulo, carpeta: n.carpeta })));
   ipcMain.handle('sesion:estado', async () => ({ claude: await core.estadoSesion('claude'), codex: await core.estadoSesion('codex') }));
   ipcMain.handle('sesion:iniciar', async (_e, cli: core.CliId) => {
-    await core.iniciarSesion(cli);
+    if (!core.buscar(cli)) throw new Error(core.mensajeFaltante(cli));
+    try {
+      await core.iniciarSesion(cli);
+    } catch (e) {
+      throw new Error(core.errorLegible(e, cli));
+    }
     return core.estadoSesion(cli);
   });
-  ipcMain.handle('pr:revisar', (_e, numero: string) => {
-    const perfil = perfilActual();
-    const repo = leerConfig().repo ?? `${perfil.repo.owner}/${perfil.repo.name}`;
-    return core.informe(core.cambioDePr(numero, repo), perfil);
+  ipcMain.handle('pr:revisar', async (_e, numero: string) => {
+    const gh = await github();
+    if (!gh) throw new Error('Conecta GitHub en Ajustes para revisar un PR.');
+    return core.informe(await gh.api.cambioDePr(repoActivo(), numero), perfilActual());
   });
   ipcMain.handle('hilos:lista', () => core.listarHilos(raizDatos()));
   ipcMain.handle('hilos:guardar', (_e, h: core.Hilo) => {
@@ -183,7 +196,20 @@ function registrarIpc(): void {
   });
   ipcMain.handle('contexto:paquete', (_e, o: Omit<core.OpcionesContexto, 'presupuesto'> & { presupuesto?: number }) => {
     const { grafo } = cargarTodo();
-    return core.paqueteDeContexto(grafo, { presupuesto: 2000, ...o });
+    const paquete = core.paqueteDeContexto(grafo, { presupuesto: 2000, ...o });
+    return { ...paquete, ...core.medirAhorro(grafo, paquete) };
+  });
+  ipcMain.handle('contexto:resumen', () => {
+    const { grafo } = cargarTodo();
+    const texto = core.resumenEstatico(grafo);
+    return { texto, ...core.medirAhorro(grafo, { tokens: core.estimarTokens(texto) }) };
+  });
+  ipcMain.handle('contexto:sesion-nueva', (_e, hiloId?: string) => {
+    const { grafo } = cargarTodo();
+    const perfil = perfilActual();
+    const hilo = hiloId ? core.cargarHilo(raizDatos(), hiloId) : undefined;
+    const texto = core.sesionNueva(hilo, core.resumenEstatico(grafo), core.promptDeRol(leerConfig().rol ?? 'desarrollador', perfil, 'breve'));
+    return { texto, tokens: core.estimarTokens(texto) };
   });
   ipcMain.handle('portapapeles:copiar', (_e, t: string) => clipboard.writeText(t));
   ipcMain.handle('agentes:orquestar', (_e, p: PedidoAgentes) => {
@@ -195,6 +221,38 @@ function registrarIpc(): void {
 // ---------- ClickUp, GitHub, plan y cola ----------
 
 const ejecutarArchivo = promisify(execFile);
+
+// ---------- GitHub por API ----------
+
+let apiGithub: { token: string; api: core.GitHubApi } | undefined;
+
+async function tokenGithub(): Promise<{ token: string; origen: 'guardado' | 'gh' } | undefined> {
+  const c = leerConfig();
+  if (c.githubToken && safeStorage.isEncryptionAvailable()) {
+    try {
+      return { token: safeStorage.decryptString(Buffer.from(c.githubToken, 'base64')), origen: 'guardado' };
+    } catch {
+      /* el llavero cambió: se intenta con gh */
+    }
+  }
+  if (core.buscar('gh')) {
+    try {
+      const { stdout } = await ejecutarArchivo('gh', ['auth', 'token'], { timeout: 10_000 });
+      if (stdout.trim()) return { token: stdout.trim(), origen: 'gh' };
+    } catch {
+      /* gh sin sesión */
+    }
+  }
+  return undefined;
+}
+
+async function github(): Promise<{ api: core.GitHubApi; origen: 'guardado' | 'gh' } | undefined> {
+  const t = await tokenGithub();
+  if (!t) return undefined;
+  if (apiGithub?.token !== t.token) apiGithub = { token: t.token, api: new core.GitHubApi(t.token) };
+  return { api: apiGithub.api, origen: t.origen };
+}
+
 
 function clickup(): core.ClickUp | undefined {
   const c = leerConfig();
@@ -249,22 +307,22 @@ function registrarIpcExtra(): void {
     const plan = core.planificar(core.tareasAPlan(tareas), o.dias, o.capacidad, perfil.limites.lineasPorPr);
     return { plan, desbordes: core.desbordes(plan, o.capacidad), tareas: tareas.length };
   });
-  ipcMain.handle('cola:cargar', () => {
+  ipcMain.handle('cola:cargar', async () => {
     const perfil = perfilActual();
-    const repo = leerConfig().repo ?? `${perfil.repo.owner}/${perfil.repo.name}`;
-    const cola = core.colaDePrs(repo, perfil.integradores);
+    const gh = await github();
+    if (!gh) throw new Error('Conecta GitHub en Ajustes para ver la cola.');
+    const cola = await gh.api.cola(repoActivo(), perfil.integradores);
     return { cola, asignaciones: core.asignar(cola, perfil.integradores), metricas: core.estadistica(cola, perfil.integradores), integradores: perfil.integradores };
   });
   ipcMain.handle('publicar:github', async (_e, p: { numero: string; texto: string }) => {
     const perfil = perfilActual();
-    const repo = leerConfig().repo ?? `${perfil.repo.owner}/${perfil.repo.name}`;
+    const gh = await github();
+    if (!gh) throw new Error('Conecta GitHub en Ajustes para publicar.');
+    const repo = repoActivo();
     const veredicto = core.decidir({ tipo: 'comentar', rol: leerConfig().rol ?? 'integrador', objetivo: `PR ${p.numero}`, afirmaciones: [], humanoAprobo: true }, perfil, []);
     if (veredicto.veredicto === 'bloquear') throw new Error(veredicto.razones.join(' '));
     if (!(await confirmarPublicacion(`el PR #${p.numero} de ${repo}`, p.texto))) return { publicado: false };
-    const archivo = join(tmpdir(), `hilo-comentario-${Date.now()}.md`);
-    writeFileSync(archivo, p.texto);
-    const { stdout } = await ejecutarArchivo('gh', ['pr', 'comment', p.numero, '-R', repo, '--body-file', archivo]);
-    return { publicado: true, enlace: stdout.trim() };
+    return { publicado: true, enlace: await gh.api.comentar(repo, p.numero, p.texto) };
   });
   ipcMain.handle('publicar:clickup', async (_e, p: { tareaId: string; texto: string }) => {
     const c = clickup();
@@ -272,6 +330,77 @@ function registrarIpcExtra(): void {
     if (!(await confirmarPublicacion(`la tarea ${p.tareaId} de ClickUp`, p.texto))) return { publicado: false };
     return { publicado: true, id: await c.comentar(p.tareaId, p.texto) };
   });
+}
+
+
+// ---------- Diagnóstico ----------
+
+interface Prueba {
+  grupo: string;
+  nombre: string;
+  estado: 'ok' | 'aviso' | 'error';
+  detalle: string;
+  ayuda?: string;
+}
+
+async function diagnosticar(): Promise<Prueba[]> {
+  const r: Prueba[] = [];
+  const ok = (grupo: string, nombre: string, detalle: string) => r.push({ grupo, nombre, estado: 'ok', detalle });
+  const mal = (grupo: string, nombre: string, detalle: string, ayuda?: string, estado: 'aviso' | 'error' = 'error') => r.push({ grupo, nombre, estado, detalle, ...(ayuda ? { ayuda } : {}) });
+
+  for (const h of ['git', 'gh', 'claude', 'codex'] as const) {
+    const ruta = core.buscar(h);
+    const opcional = h === 'gh' || h === 'codex';
+    if (ruta) ok('Herramientas', core.AYUDA_INSTALACION[h].nombre, ruta);
+    else mal('Herramientas', core.AYUDA_INSTALACION[h].nombre, 'No se encuentra en el PATH de la app.', core.mensajeFaltante(h), opcional ? 'aviso' : 'error');
+  }
+  ok('Sistema', 'PATH de la app', `${(process.env.PATH ?? '').split(':').length} carpetas`);
+  if (safeStorage.isEncryptionAvailable()) ok('Sistema', 'Llavero para cifrar tokens', 'disponible');
+  else mal('Sistema', 'Llavero para cifrar tokens', 'No disponible: no se pueden guardar tokens.');
+  if (Notification.isSupported()) ok('Sistema', 'Notificaciones', 'disponibles');
+  else mal('Sistema', 'Notificaciones', 'No disponibles en este sistema.', undefined, 'aviso');
+
+  for (const cli of ['claude', 'codex'] as const) {
+    const s = await core.estadoSesion(cli);
+    if (s.conectado) ok('Suscripciones', cli === 'claude' ? 'Claude Code' : 'Codex', s.detalle);
+    else mal('Suscripciones', cli === 'claude' ? 'Claude Code' : 'Codex', s.detalle, s.instalado ? 'Inicia sesión desde Ajustes, Suscripciones.' : core.mensajeFaltante(cli), cli === 'codex' || !s.instalado ? 'aviso' : 'error');
+  }
+
+  const gh = await github();
+  if (!gh) mal('GitHub', 'Cuenta', 'Sin conectar.', 'Usa Conectar GitHub (necesita gh) o pega un token personal.');
+  else {
+    try {
+      const u = await gh.api.yo();
+      ok('GitHub', 'Cuenta', `${u.login} · token ${gh.origen === 'gh' ? 'de gh' : 'pegado'}`);
+      const repo = repoActivo();
+      if (await gh.api.repoValido(repo)) {
+        ok('GitHub', `Acceso a ${repo}`, 'lectura correcta');
+        const prs = await gh.api.prsAbiertos(repo, u.login);
+        ok('GitHub', 'PR abiertos', `${prs.length} leídos con su CI y revisiones`);
+      } else mal('GitHub', `Acceso a ${repo}`, 'No se puede abrir.', 'Revisa el nombre y que tu cuenta tenga acceso (y SSO si la organización lo exige).');
+      const l = await gh.api.limite();
+      ok('GitHub', 'Cupo de peticiones', `${l.restante} de ${l.total} por hora`);
+    } catch (e) {
+      mal('GitHub', 'Conexión', core.errorLegible(e));
+    }
+  }
+
+  const cu = clickup();
+  if (!cu) mal('ClickUp', 'Cuenta', 'Sin conectar.', 'Pega tu token personal en Ajustes, Conexiones.');
+  else {
+    try {
+      const q = await cu.yo();
+      ok('ClickUp', 'Cuenta', q.usuario);
+      const perfil = perfilActual();
+      const listas = leerConfig().listasClickup?.length ? leerConfig().listasClickup! : Object.values(perfil.clickup.listas);
+      let total = 0;
+      for (const l of listas.slice(0, 3)) total += (await cu.tareasDeLista(l)).length;
+      ok('ClickUp', 'Listas seguidas', `${listas.length} listas · ${total} tareas leídas en las primeras ${Math.min(3, listas.length)}`);
+    } catch (e) {
+      mal('ClickUp', 'Conexión', core.errorLegible(e));
+    }
+  }
+  return r;
 }
 
 // ---------- Identidad, Mi día, avisos e instalaciones ----------
@@ -287,10 +416,16 @@ async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: str
   const perfil = perfilActual();
   const repo = repoActivo();
   const avisosDeConexion: string[] = [];
-  const gh = core.usuarioGithub();
-  if (!gh) avisosDeConexion.push('GitHub no está conectado.');
+  const gh = await github();
+  let yo: core.Identidad = {};
+  if (gh) {
+    try {
+      yo = { github: (await gh.api.yo()).login };
+    } catch (e) {
+      avisosDeConexion.push(`GitHub: ${core.errorLegible(e)}`);
+    }
+  } else avisosDeConexion.push('GitHub no está conectado.');
   const cu = clickup();
-  let yo: core.Identidad = gh ? { github: gh.login } : {};
   let tareas: core.TareaClickup[] = [];
   if (cu) {
     try {
@@ -299,21 +434,23 @@ async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: str
       const listas = leerConfig().listasClickup?.length ? leerConfig().listasClickup! : Object.values(perfil.clickup.listas);
       tareas = (await Promise.all(listas.map((l) => cu.tareasDeLista(l)))).flat();
     } catch (e) {
-      avisosDeConexion.push(`ClickUp: ${String(e)}`);
+      avisosDeConexion.push(`ClickUp: ${core.errorLegible(e)}`);
     }
   } else avisosDeConexion.push('ClickUp no está conectado.');
   let prs: core.PrResumen[] = [];
-  try {
-    prs = core.prsAbiertos(repo, gh?.login);
-    for (const p of prs.filter((x) => x.autor === gh?.login).slice(0, 6)) {
-      try {
-        p.erroresDeFormato = core.informe(core.cambioDePr(p.numero, repo), perfil).errores.length;
-      } catch {
-        /* sin permiso para leer ese PR: se omite su formato */
+  if (gh && yo.github) {
+    try {
+      prs = await gh.api.prsAbiertos(repo, yo.github);
+      for (const p of prs.filter((x) => x.autor === yo.github).slice(0, 6)) {
+        try {
+          p.erroresDeFormato = core.informe(await gh.api.cambioDePr(repo, p.numero), perfil).errores.length;
+        } catch {
+          /* sin permiso para leer ese PR: se omite su formato */
+        }
       }
+    } catch (e) {
+      avisosDeConexion.push(`GitHub (${repo}): ${core.errorLegible(e)}`);
     }
-  } catch (e) {
-    avisosDeConexion.push(`GitHub (${repo}): ${String(e).slice(0, 120)}`);
   }
   return { dia: core.miDia(tareas, prs, yo, perfil, new Date(), leerConfig().rol), avisosDeConexion };
 }
@@ -337,21 +474,32 @@ async function vigilar(): Promise<void> {
 function registrarIpcConexiones(): void {
   ipcMain.handle('conexion:estado', async () => {
     const c = leerConfig();
-    const gh = core.usuarioGithub();
+    const gh = await github();
+    let github_: { conectado: boolean; login?: string; nombre?: string; origen?: string; error?: string } = { conectado: false };
+    if (gh) {
+      try {
+        const u = await gh.api.yo();
+        github_ = { conectado: true, login: u.login, nombre: u.nombre, origen: gh.origen === 'gh' ? 'gh' : 'token' };
+      } catch (e) {
+        github_ = { conectado: false, error: core.errorLegible(e) };
+      }
+    }
     const cu = clickup();
     let clickupEstado: { conectado: boolean; usuario?: string; error?: string } = { conectado: false };
     if (cu) {
       try {
         clickupEstado = { conectado: true, usuario: (await cu.yo()).usuario };
       } catch (e) {
-        clickupEstado = { conectado: false, error: String(e) };
+        clickupEstado = { conectado: false, error: core.errorLegible(e) };
       }
     }
-    return { github: gh ? { conectado: true, login: gh.login, nombre: gh.nombre } : { conectado: false }, clickup: clickupEstado, repos: c.repos ?? [], repo: repoActivo(), avisos: Boolean(c.avisos), rol: c.rol };
+    return { github: { ...github_, ghInstalado: Boolean(core.buscar('gh')) }, clickup: clickupEstado, repos: c.repos ?? [], repo: repoActivo(), avisos: Boolean(c.avisos), rol: c.rol };
   });
   ipcMain.handle('github:conectar', () =>
     new Promise<{ login?: string }>((resolver, rechazar) => {
-      const p = spawn('gh', ['auth', 'login', '--web', '--hostname', 'github.com', '--git-protocol', 'https', '--skip-ssh-key'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const ruta = core.buscar('gh');
+      if (!ruta) return rechazar(new Error(`${core.mensajeFaltante('gh')} También puedes pegar un token personal de GitHub abajo.`));
+      const p = spawn(ruta, ['auth', 'login', '--web', '--hostname', 'github.com', '--git-protocol', 'https', '--skip-ssh-key'], { stdio: ['pipe', 'pipe', 'pipe'] });
       let enviado = false;
       const leer = (d: Buffer) => {
         const t = d.toString('utf8');
@@ -364,14 +512,32 @@ function registrarIpcConexiones(): void {
       };
       p.stdout.on('data', leer);
       p.stderr.on('data', leer);
-      p.on('error', rechazar);
-      p.on('close', (c) => (c === 0 ? resolver({ login: core.usuarioGithub()?.login }) : rechazar(new Error('No se completó el inicio de sesión de GitHub.'))));
+      p.on('error', (e) => rechazar(new Error(core.errorLegible(e, 'gh'))));
+      p.on('close', async (c) => {
+        if (c !== 0) return rechazar(new Error('No se completó el inicio de sesión de GitHub.'));
+        apiGithub = undefined;
+        resolver({ login: (await (await github())?.api.yo())?.login });
+      });
     }),
   );
-  ipcMain.handle('repos:agregar', (_e, texto: string) => {
+  ipcMain.handle('github:token', async (_e, token: string) => {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('El sistema no tiene llavero disponible para cifrar el token.');
+    const quien = await new core.GitHubApi(token.trim()).yo();
+    guardarConfig({ ...leerConfig(), githubToken: safeStorage.encryptString(token.trim()).toString('base64') });
+    apiGithub = undefined;
+    return quien;
+  });
+  ipcMain.handle('github:borrar-token', () => {
+    const { githubToken: _quitado, ...resto } = leerConfig();
+    guardarConfig(resto);
+    apiGithub = undefined;
+  });
+  ipcMain.handle('repos:agregar', async (_e, texto: string) => {
     const repo = normalizarRepo(texto);
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('Escribe el repositorio como dueño/nombre o pega su dirección de GitHub.');
-    if (!core.repoValido(repo)) throw new Error(`No pude abrir ${repo}. Revisa el nombre y que tu cuenta de GitHub tenga acceso.`);
+    const gh = await github();
+    if (!gh) throw new Error('Conecta GitHub primero.');
+    if (!(await gh.api.repoValido(repo))) throw new Error(`No pude abrir ${repo}. Revisa el nombre y que tu cuenta de GitHub tenga acceso.`);
     const c = leerConfig();
     return guardarConfig({ ...c, repos: [...new Set([...(c.repos ?? []), repo])], repo }).repos;
   });
@@ -394,10 +560,11 @@ function registrarIpcConexiones(): void {
     guardarConfig(rol ? { ...resto, rol } : resto);
   });
   ipcMain.handle('midia:cargar', () => calcularMiDia());
+  ipcMain.handle('diagnostico:correr', () => diagnosticar());
   ipcMain.handle('instalaciones:conteo', async () => {
     const repo = leerConfig().repoHilo ?? 'kisnner26/hilo';
-    const { stdout } = await ejecutarArchivo('gh', ['api', `repos/${repo}/releases`, '--jq', '[.[]|{tag:.tag_name,publicado:.published_at,activos:[.assets[]|{nombre:.name,descargas:.download_count}]}]']);
-    const rel = JSON.parse(stdout) as { tag: string; publicado: string; activos: { nombre: string; descargas: number }[] }[];
+    const gh = await github();
+    const rel = gh ? await gh.api.releases(repo) : await core.publicoReleases(repo);
     return { repo, releases: rel.map((r) => ({ ...r, total: r.activos.reduce((n, a) => n + a.descargas, 0) })) };
   });
 }

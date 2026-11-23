@@ -160,3 +160,12 @@ export class GitHubApi {
     return r.map((x) => ({ tag: x.tag_name, publicado: x.published_at, activos: x.assets.map((a) => ({ nombre: a.name, descargas: a.download_count })) }));
   }
 }
+
+/** Releases de un repositorio público sin token (para contar descargas aunque la persona no haya conectado GitHub). */
+export async function publicoReleases(repo: string, fetchFn: Fetch = fetch as unknown as Fetch): Promise<{ tag: string; publicado: string; activos: { nombre: string; descargas: number }[] }[]> {
+  const r = await fetchFn(`${BASE}/repos/${repo}/releases?per_page=30`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'hilo' } });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new ErrorGithub(r.status, `GitHub respondió ${r.status}.`);
+  const j = (await r.json()) as { tag_name: string; published_at: string; assets: { name: string; download_count: number }[] }[];
+  return j.map((x) => ({ tag: x.tag_name, publicado: x.published_at, activos: x.assets.map((a) => ({ nombre: a.name, descargas: a.download_count })) }));
+}
