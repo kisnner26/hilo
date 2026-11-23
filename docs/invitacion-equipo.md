@@ -4,7 +4,7 @@
 
 > para los que tengan ia de paga (claude code o codex): armé una app que junta clickup y github y te dice qué te toca hoy, revisa tu pr con el formato acordado antes de abrirlo y te deja listo el comentario de entrega. la idea es que casi no haya vueltas de revisión, porque nos quedan dos semanas.
 > es opcional y no pide claves de api: usa tu suscripción. conectas github y clickup una sola vez y listo.
-> descarga: {enlace del release}
+> descarga: https://github.com/kisnner26/hilo/releases/latest
 
 ## cómo se cuenta cuánta gente la instaló
 

@@ -16,6 +16,10 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 
 ![revisar un pr](docs/img/revisar.png)
 
+## instalar
+
+descarga el instalador de tu sistema en [releases](https://github.com/kisnner26/hilo/releases/latest): macos (apple silicon), windows y linux.
+
 ## conectar y empezar
 
 abre la app y conecta tus cuentas, una sola vez:
