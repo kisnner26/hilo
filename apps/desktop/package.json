@@ -53,8 +53,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        "AppImage"
       ],
       "category": "Development",
       "executableName": "hilo"
