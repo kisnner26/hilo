@@ -125,12 +125,6 @@ export function App() {
   const [ayuda, setAyuda] = useState(false);
   const [pestanaAjustes, setPestanaAjustes] = useState<PestanaAjustes>('cuentas');
 
-  // Cristal real (vibrancy en macOS, acrílico en Windows 11): el fondo de la ventana es transparente.
-  useEffect(() => {
-    const p = typeof window !== 'undefined' ? window.hilo?.plataforma : undefined;
-    document.documentElement.classList.toggle('cristal', p === 'darwin' || p === 'win32');
-  }, []);
-
   useEffect(() => void api.perfil().then(setPerfil), [recarga]);
 
   // Conexiones, rol y fase de arranque. Lo primero siempre es conectar GitHub y ClickUp.

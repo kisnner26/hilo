@@ -99,12 +99,9 @@ function crearVentana(): void {
     minWidth: 980,
     minHeight: 640,
     title: 'Hilo',
-    // Vidrio de verdad: macOS con vibrancy y Windows 11 con acrílico; en Linux, fondo oscuro sólido.
-    ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 }, vibrancy: 'hud' as const, visualEffectState: 'active' as const, transparent: true, backgroundColor: '#00000000' }
-      : process.platform === 'win32'
-        ? { backgroundMaterial: 'acrylic' as const, backgroundColor: '#00000000' }
-        : { backgroundColor: '#07070b' }),
+    // Fondo propio y constante: el cristal lo dibuja la app. Así el tono no depende del escritorio ni cambia en pantalla completa.
+    backgroundColor: '#070708',
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   ventana.webContents.setWindowOpenHandler(({ url }) => {
