@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Hilo: contexto, decisión y formatos para el equipo, con Claude Code y Codex por suscripción.",
-  "author": "Hilo",
+  "author": {
+    "name": "Hilo",
+    "email": "kisnner26@users.noreply.github.com"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -53,7 +56,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "executableName": "hilo"
     },
     "extraResources": [
       {
@@ -73,5 +77,6 @@
       }
     ]
   },
-  "repository": "https://github.com/kisnner26/hilo"
+  "repository": "https://github.com/kisnner26/hilo",
+  "homepage": "https://github.com/kisnner26/hilo"
 }
