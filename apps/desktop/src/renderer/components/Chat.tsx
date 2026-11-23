@@ -6,7 +6,12 @@ type Mensaje =
   | { id: number; de: 'yo'; texto: string }
   | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number };
 
-const SUGERENCIAS = ['¿Qué tarea tengo?', '¿Qué hago hoy?', '¿Cuáles son mis PR?', 'Explícame cómo está organizado el proyecto'];
+const SUGERENCIAS: { t: string; sub: string }[] = [
+  { t: '¿Qué tarea tengo?', sub: 'Tus tareas de ClickUp' },
+  { t: '¿Qué hago hoy?', sub: 'Lo más urgente primero' },
+  { t: '¿Cuáles son mis PR?', sub: 'Estado y revisión' },
+  { t: 'Explícame cómo está organizado el proyecto', sub: 'Un mapa rápido' },
+];
 const ROTULO: Record<string, string> = { entender: 'Entenderla', hacer: 'Hacerla', revisar: 'Revisarla', bloqueo: 'Escribir el bloqueo' };
 const PEDIDO: Record<string, string> = { entender: 'Entender', hacer: 'Hacer', revisar: 'Revisar', bloqueo: 'Escribir el bloqueo de' };
 
@@ -49,6 +54,11 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   const enviar = (mostrar: string, pedido: { texto?: string; tarea?: { accion: string; ref: string } }) => {
     if (ocupado) return;
     setOcupado(true);
+    try {
+      localStorage.setItem('hilo.pregunto', '1');
+    } catch {
+      /* sin almacenamiento */
+    }
     setMensajes((ms) => [...ms, { id: nuevoId(), de: 'yo', texto: mostrar }, { id: nuevoId(), de: 'asistente', texto: '', escribiendo: true }]);
     api.chatEnviar({ conv, ...pedido });
   };
@@ -68,12 +78,12 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   return (
     <div className="chat">
       <header className="chat-cabeza">
-        <div>
+        <div className="titulo-chat">
           <h2>Asistente</h2>
-          <p className="suave">
-            {saludo ? `${saludo} · ` : ''}
-            {rol ? `rol ${rol} · ` : ''}conoce tus tareas de ClickUp y tus PR de GitHub. Pregúntale lo que quieras del proyecto.
-          </p>
+          <span className="chips-linea">
+            {rol && <span className="dist">{rol}</span>}
+            {saludo && <span className="dist">{saludo}</span>}
+          </span>
         </div>
         <button className="boton secundario" onClick={nueva}>
           Nueva conversación
@@ -83,11 +93,12 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
       <div className="chat-mensajes">
         {mensajes.length === 0 && (
           <div className="chat-vacio">
-            <p className="suave">Empieza con una pregunta o toca una sugerencia:</p>
-            <div className="chips">
-              {SUGERENCIAS.map((s) => (
-                <button key={s} className="chip" onClick={() => preguntar(s)}>
-                  {s}
+            <h3>¿En qué te ayudo?</h3>
+            <div className="sugerencias">
+              {SUGERENCIAS.map((x) => (
+                <button key={x.t} className="sugerencia" onClick={() => preguntar(x.t)}>
+                  <b>{x.t}</b>
+                  <span>{x.sub}</span>
                 </button>
               ))}
             </div>
@@ -100,7 +111,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
             </div>
           ) : (
             <div key={m.id} className={`burbuja asistente${m.error ? ' con-error' : ''}`}>
-              {m.escribiendo && !m.texto ? <span className="pensando">Pensando…</span> : <div className="md" dangerouslySetInnerHTML={{ __html: mdAHtml(m.texto) }} />}
+              {m.escribiendo && !m.texto ? <span className="puntos-pensando" aria-label="Pensando"><i /><i /><i /></span> : <div className="md" dangerouslySetInnerHTML={{ __html: mdAHtml(m.texto) }} />}
               {m.tarjetas && m.tarjetas.length > 0 && (
                 <div className="tarjetas-chat">
                   {m.tarjetas.map((t) => (
@@ -136,7 +147,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
       </div>
 
       <form
-        className="chat-entrada"
+        className="compositor"
         onSubmit={(e) => {
           e.preventDefault();
           preguntar(texto);
@@ -144,8 +155,8 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
       >
         <textarea
           value={texto}
-          rows={2}
-          placeholder="Escribe tu pregunta… (Enter envía, Shift+Enter hace un salto de línea)"
+          rows={1}
+          placeholder="Pregunta lo que quieras…"
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -154,8 +165,10 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
             }
           }}
         />
-        <button className="boton" type="submit" disabled={ocupado || !texto.trim()}>
-          {ocupado ? 'Respondiendo…' : 'Enviar'}
+        <button className="enviar" type="submit" disabled={ocupado || !texto.trim()} aria-label="Enviar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
       </form>
     </div>

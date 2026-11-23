@@ -22,7 +22,6 @@ export function Tablero() {
   return (
     <div className="columna ancha">
       <h2>Tablero</h2>
-      <p className="suave">La cola de PR repartida entre integradores y el plan de los días que quedan, con las tareas reales de ClickUp.</p>
 
       <h3>Cola de revisión</h3>
       <button className="boton secundario" disabled={ocupado === 'cola'} onClick={() => void correr('cola', async () => setCola(await api.cola()))}>
@@ -57,7 +56,6 @@ export function Tablero() {
               ))}
             </tbody>
           </table>
-          <p className="suave">Las rondas cuentan comentarios y revisiones de integradores: es una aproximación. La propuesta reparte por carga y nunca asigna al autor.</p>
         </>
       )}
 
@@ -78,7 +76,7 @@ export function Tablero() {
       {plan && (
         <>
           <p className="suave">
-            {plan.tareas} tareas leídas de ClickUp. Las líneas por tarea son estimaciones por tipo (backend 400, frontend 300, pruebas 200).
+            {plan.tareas} tareas de ClickUp · líneas estimadas por tipo.
             {plan.desbordes.length > 0 ? ` Los días ${plan.desbordes.join(', ')} pasan la capacidad: recorta alcance.` : ''}
           </p>
           <table className="tabla">

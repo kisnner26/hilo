@@ -1,13 +1,21 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { GraphView } from './components/GraphView';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Bienvenida } from './components/Bienvenida';
 import { Chat } from './components/Chat';
+import { GraphView } from './components/GraphView';
+import { Ajustes, type PestanaAjustes } from './components/Ajustes';
+import { Ayuda } from './components/Ayuda';
 import { Inicio } from './components/Inicio';
+import { Notas } from './components/Notas';
+import { Revisar } from './components/Revisar';
+import { Recorrido, type PasoRecorrido } from './components/Recorrido';
 import { Tablero } from './components/Tablero';
-import { AgentesPanel, AjustesPanel, HilosPanel, NotasPanel, RevisarPanel } from './components/Panels';
-import { api, type PerfilVista } from './lib/api';
+import { AgentesPanel, HilosPanel } from './components/Panels';
+import { api, type Conexion, type PerfilVista } from './lib/api';
 import type { NodoVista } from './lib/galaxy';
 
 type Vista = 'asistente' | 'inicio' | 'tablero' | 'grafo' | 'notas' | 'revisar' | 'agentes' | 'hilos' | 'ajustes';
+type Rol = 'desarrollador' | 'documentador' | 'tester' | 'integrador';
+type Fase = 'carga' | 'bienvenida' | 'recorrido' | 'app';
 
 const Icono = ({ d }: { d: ReactNode }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -15,17 +23,42 @@ const Icono = ({ d }: { d: ReactNode }) => (
   </svg>
 );
 
-const SECCIONES: { id: Vista; nombre: string; icono: ReactNode }[] = [
-  { id: 'asistente', nombre: 'Asistente', icono: <Icono d={<><path d="M4 5h16v11H9l-5 4z" /><path d="M8.5 10h7M8.5 13h4" /></>} /> },
-  { id: 'inicio', nombre: 'Mi día', icono: <Icono d={<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" /></>} /> },
-  { id: 'tablero', nombre: 'Tablero', icono: <Icono d={<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 4v16M15 4v10" /></>} /> },
-  { id: 'grafo', nombre: 'Grafo', icono: <Icono d={<><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="6" r="2.2" /><circle cx="12" cy="17" r="2.2" /><path d="M8 8l3 7M16.2 7.7L13 15M8.2 7h7.6" /></>} /> },
-  { id: 'notas', nombre: 'Notas', icono: <Icono d={<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 13h7M9 17h7" /></>} /> },
-  { id: 'revisar', nombre: 'Revisar PR', icono: <Icono d={<><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="8" r="2.2" /><path d="M6 8v8M18 10v3a4 4 0 01-4 4h-3.5" /></>} /> },
-  { id: 'agentes', nombre: 'Agentes', icono: <Icono d={<><rect x="5" y="8" width="14" height="10" rx="3" /><path d="M12 8V5M9.5 13h.01M14.5 13h.01M9 21h6" /></>} /> },
-  { id: 'hilos', nombre: 'Hilos', icono: <Icono d={<><path d="M4 7c4-4 6 4 10 0s5-3 6-1M4 13c4-4 6 4 10 0s5-3 6-1M4 19c4-4 6 4 10 0s5-3 6-1" /></>} /> },
-  { id: 'ajustes', nombre: 'Ajustes', icono: <Icono d={<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>} /> },
+interface Seccion {
+  id: Vista;
+  nombre: string;
+  icono: ReactNode;
+  /** Roles que la ven; sin roles = todos. */
+  roles?: Rol[];
+  corto: string;
+  tour: { titulo: string; texto: string };
+}
+
+const SECCIONES: Seccion[] = [
+  { id: 'asistente', corto: 'Pregunta lo que quieras', nombre: 'Asistente', icono: <Icono d={<><path d="M4 5h16v11H9l-5 4z" /><path d="M8.5 10h7M8.5 13h4" /></>} />, tour: { titulo: 'Asistente', texto: 'Pregúntale lo que quieras. Conoce tu rol, tus tareas y tus PR. Prueba: «¿Qué tarea tengo?»' } },
+  { id: 'inicio', corto: 'Tus tareas y PR de hoy', nombre: 'Mi día', icono: <Icono d={<><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" /></>} />, tour: { titulo: 'Mi día', texto: 'Tus tareas y PR por urgencia, con el comentario de entrega ya preparado.' } },
+  { id: 'tablero', corto: 'Cola y plan por días', nombre: 'Tablero', roles: ['integrador'], icono: <Icono d={<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 4v16M15 4v10" /></>} />, tour: { titulo: 'Tablero', texto: 'La cola de revisión y el plan por días. Para integradores.' } },
+  { id: 'grafo', corto: 'El mapa del proyecto', nombre: 'Grafo', icono: <Icono d={<><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="6" r="2.2" /><circle cx="12" cy="17" r="2.2" /><path d="M8 8l3 7M16.2 7.7L13 15M8.2 7h7.6" /></>} />, tour: { titulo: 'Grafo', texto: 'El mapa del proyecto. Pasa el cursor para ver conexiones y copiar solo el contexto que necesitas.' } },
+  { id: 'notas', corto: 'Documentos en Markdown', nombre: 'Notas', icono: <Icono d={<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 13h7M9 17h7" /></>} />, tour: { titulo: 'Notas', texto: 'Los documentos del proyecto, para leer sin salir de la app.' } },
+  { id: 'revisar', corto: 'Formato de cada PR', nombre: 'Revisar PR', roles: ['integrador'], icono: <Icono d={<><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="8" r="2.2" /><path d="M6 8v8M18 10v3a4 4 0 01-4 4h-3.5" /></>} />, tour: { titulo: 'Revisar PR', texto: 'Todos los PR se revisan solos. Un clic copia o publica la lista de correcciones. Para integradores.' } },
+  { id: 'agentes', corto: 'Orquestador y subagentes', nombre: 'Agentes', roles: ['desarrollador', 'documentador', 'integrador'], icono: <Icono d={<><rect x="5" y="8" width="14" height="10" rx="3" /><path d="M12 8V5M9.5 13h.01M14.5 13h.01M9 21h6" /></>} />, tour: { titulo: 'Agentes', texto: 'Un orquestador reparte un objetivo entre subagentes. Nada se publica sin tu confirmación.' } },
+  { id: 'hilos', corto: 'El hilo de cada tarea', nombre: 'Hilos', icono: <Icono d={<><path d="M4 7c4-4 6 4 10 0s5-3 6-1M4 13c4-4 6 4 10 0s5-3 6-1M4 19c4-4 6 4 10 0s5-3 6-1" /></>} />, tour: { titulo: 'Hilos', texto: 'El hilo de tu tarea, para no perder el rumbo.' } },
+  { id: 'ajustes', corto: 'Cuentas, modelos y ahorro', nombre: 'Ajustes', icono: <Icono d={<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>} />, tour: { titulo: 'Ajustes', texto: 'Cuentas, modelos, ahorro de tokens y tareas automáticas.' } },
 ];
+
+const guardado = (k: string): string | null => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+const guardar = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* sin almacenamiento: el recorrido volverá a salir */
+  }
+};
 
 function Inspector({ nodo, cerrar }: { nodo: NodoVista; cerrar: () => void }) {
   const [info, setInfo] = useState<{ tokens: number; nodos: number } | null>(null);
@@ -80,52 +113,151 @@ function Inspector({ nodo, cerrar }: { nodo: NodoVista; cerrar: () => void }) {
 
 export function App() {
   const [vista, setVista] = useState<Vista>('asistente');
-  const [prARevisar, setPrARevisar] = useState('');
   const [nodo, setNodo] = useState<NodoVista | null>(null);
   const [perfil, setPerfil] = useState<PerfilVista | null>(null);
   const [recarga, setRecarga] = useState(0);
-  useEffect(() => void api.perfil().then(setPerfil), [recarga]);
-  const [perfilRol, setPerfilRol] = useState<string | undefined>();
-  const [perfilSaludo, setPerfilSaludo] = useState<string | undefined>();
+  const [prARevisar, setPrARevisar] = useState('');
+  const [fase, setFase] = useState<Fase>('carga');
+  const [con, setCon] = useState<Conexion | null>(null);
+  const [rol, setRol] = useState<Rol | undefined>();
+  // El recorrido espera a conocer el rol (o 8 s) para no cambiar de pasos a mitad de camino.
+  const [esperaRol, setEsperaRol] = useState(true);
+  const [ayuda, setAyuda] = useState(false);
+  const [pestanaAjustes, setPestanaAjustes] = useState<PestanaAjustes>('cuentas');
+
+  // Cristal real (vibrancy en macOS, acrílico en Windows 11): el fondo de la ventana es transparente.
   useEffect(() => {
+    const p = typeof window !== 'undefined' ? window.hilo?.plataforma : undefined;
+    document.documentElement.classList.toggle('cristal', p === 'darwin' || p === 'win32');
+  }, []);
+
+  useEffect(() => void api.perfil().then(setPerfil), [recarga]);
+
+  // Conexiones, rol y fase de arranque. Lo primero siempre es conectar GitHub y ClickUp.
+  useEffect(() => {
+    let vivo = true;
     void api.conexion().then((c) => {
-      setPerfilRol(c.rol);
-      setPerfilSaludo(c.github.login ?? c.clickup.usuario);
+      if (!vivo) return;
+      setCon(c);
+      const conectado = c.github.conectado && c.clickup.conectado;
+      if (c.rol) setRol(c.rol as Rol);
+      else if (conectado) void api.miDia().then((r) => vivo && setRol(r.dia.rol as Rol));
+      else setEsperaRol(false);
+      setFase((f) => {
+        if (f !== 'carga') return f;
+        if (!conectado && !sessionStorage.getItem('hilo.omitido')) return 'bienvenida';
+        return guardado('hilo.recorrido') ? 'app' : 'recorrido';
+      });
     });
+    return () => {
+      vivo = false;
+    };
   }, [recarga]);
+
+  useEffect(() => {
+    if (rol) setEsperaRol(false);
+    const t = setTimeout(() => setEsperaRol(false), 8000);
+    return () => clearTimeout(t);
+  }, [rol]);
+
+  const visibles = useMemo(() => SECCIONES.filter((s) => !s.roles || (rol && s.roles.includes(rol))), [rol]);
+  useEffect(() => {
+    if (vista !== 'revisar' && !visibles.some((s) => s.id === vista)) setVista('asistente');
+  }, [visibles, vista]);
+
+  const conectado = Boolean(con?.github.conectado && con?.clickup.conectado);
+  const pasos: PasoRecorrido[] = [
+    { titulo: 'Así funciona Hilo', texto: 'Junta tu GitHub y tu ClickUp para decirte qué te toca. Un minuto de recorrido.' },
+    ...visibles.map((s) => ({ objetivo: s.id, ...s.tour })),
+    { titulo: 'Listo', texto: 'Empieza por el Asistente. El botón Ayuda siempre está abajo a la izquierda.' },
+  ];
+
+  const abrirRevision = (n: string) => {
+    setPrARevisar(n);
+    setVista('revisar');
+  };
+
   return (
     <div className="aplicacion">
+      <div className="fondo-liquido" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
       <div className="barra-titulo" />
-      <nav className="riel">
-        {SECCIONES.map((s) => (
-          <button key={s.id} className={`riel-boton${vista === s.id ? ' activo' : ''}`} onClick={() => setVista(s.id)} title={s.nombre} aria-label={s.nombre}>
+      <nav className="riel vidrio">
+        {visibles.map((s) => (
+          <button key={s.id} data-tour={s.id} className={`riel-boton${vista === s.id ? ' activo' : ''}`} onClick={() => setVista(s.id)} title={s.nombre} aria-label={s.nombre}>
             {s.icono}
             <span>{s.nombre}</span>
           </button>
         ))}
+        <span className="espacio" />
+        <button className="riel-boton" data-tour="ayuda" onClick={() => setAyuda(true)} title="Ayuda" aria-label="Ayuda">
+          <Icono d={<><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 114 2c-.8.6-1.5 1-1.5 2M12 17h.01" /></>} />
+          <span>Ayuda</span>
+        </button>
       </nav>
       <main className="principal">
+        {fase === 'app' && !conectado && con && vista !== 'grafo' && (
+          <div className="aviso-conexion vidrio">
+            <span>Conecta GitHub y ClickUp para ver tus datos reales.</span>
+            <button className="boton" onClick={() => setFase('bienvenida')}>
+              Conectar ahora
+            </button>
+          </div>
+        )}
         <div className={vista === 'grafo' ? 'ocupa' : 'oculta'}>
-          <GraphView
-            elegido={nodo}
-            recargar={recarga}
-            alElegir={(n) => {
-              setNodo(n);
-            }}
-          />
+          <GraphView elegido={nodo} recargar={recarga} alElegir={(n) => setNodo(n)} />
           {nodo && <Inspector nodo={nodo} cerrar={() => setNodo(null)} />}
         </div>
-        {vista === 'notas' && <NotasPanel nodo={nodo} />}
         <div className={vista === 'asistente' ? 'ocupa' : 'oculta'}>
-          <Chat rol={perfilRol} saludo={perfilSaludo} />
+          <Chat rol={rol} saludo={con?.github.login ?? con?.clickup.usuario} />
         </div>
-        {vista === 'inicio' && <Inicio version={recarga} abrirRevision={(n) => { setPrARevisar(n); setVista('revisar'); }} />}
+        {vista === 'inicio' && <Inicio version={recarga} abrirRevision={abrirRevision} conectar={() => setFase('bienvenida')} />}
         {vista === 'tablero' && <Tablero />}
-        {vista === 'revisar' && <RevisarPanel inicial={prARevisar} />}
+        {vista === 'notas' && <Notas nodo={nodo} />}
+        {vista === 'revisar' && <Revisar inicial={prARevisar} integrador={rol === 'integrador'} volver={() => setVista('inicio')} />}
         {vista === 'agentes' && <AgentesPanel perfil={perfil} />}
         {vista === 'hilos' && <HilosPanel />}
-        {vista === 'ajustes' && <AjustesPanel perfil={perfil} alCambiar={() => setRecarga((x) => x + 1)} />}
+        {vista === 'ajustes' && <Ajustes perfil={perfil} inicial={pestanaAjustes} alCambiar={() => setRecarga((x) => x + 1)} verRecorrido={() => setFase('recorrido')} />}
       </main>
+
+      {ayuda && (
+        <Ayuda
+          cerrar={() => setAyuda(false)}
+          secciones={visibles.map((x) => ({ id: x.id, nombre: x.nombre, corto: x.corto, icono: x.icono }))}
+          con={con}
+          ir={(id) => setVista(id as Vista)}
+          verRecorrido={() => setFase('recorrido')}
+          probarConexiones={() => {
+            setPestanaAjustes(conectado ? 'diagnostico' : 'cuentas');
+            if (conectado) setVista('ajustes');
+            else setFase('bienvenida');
+          }}
+        />
+      )}
+      {fase === 'bienvenida' && (
+        <Bienvenida
+          alOmitir={() => {
+            sessionStorage.setItem('hilo.omitido', '1');
+            setFase('app');
+          }}
+          alTerminar={() => {
+            setRecarga((x) => x + 1);
+            setFase(guardado('hilo.recorrido') ? 'app' : 'recorrido');
+          }}
+        />
+      )}
+      {fase === 'recorrido' && !esperaRol && (
+        <Recorrido
+          pasos={pasos}
+          alCerrar={() => {
+            guardar('hilo.recorrido', 'hecho');
+            setFase('app');
+          }}
+        />
+      )}
     </div>
   );
 }

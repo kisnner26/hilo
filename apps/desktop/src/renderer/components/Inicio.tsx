@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api, type Conexion, type MiDiaVista, type PrVista, type Sugerencia } from '../lib/api';
-import { Conexiones } from './Conexiones';
 
-const NOMBRE_TIPO: Record<Sugerencia['tipo'], string> = {
+const ROTULO: Record<Sugerencia['tipo'], string> = {
   ci: 'CI',
   formato: 'Formato',
-  'revision-recibida': 'Revisión',
+  'revision-recibida': 'Cambios',
   bloqueo: 'Bloqueo',
   vencida: 'Vencida',
   'abrir-pr': 'Abrir PR',
@@ -14,12 +13,11 @@ const NOMBRE_TIPO: Record<Sugerencia['tipo'], string> = {
   espera: 'Espera',
 };
 
-function Distintivo({ pr }: { pr: PrVista }) {
+function Estado({ pr }: { pr: PrVista }) {
   return (
     <span className="distintivos">
       <span className={`dist ${pr.ci === 'ok' ? 'ok' : pr.ci === 'fallo' ? 'mal' : 'pend'}`}>CI {pr.ci}</span>
-      <span className={`dist ${pr.revision === 'aprobado' ? 'ok' : pr.revision === 'cambios' ? 'mal' : 'pend'}`}>{pr.revision}</span>
-      {pr.borrador && <span className="dist pend">borrador</span>}
+      {pr.borrador && <span className="dist">borrador</span>}
     </span>
   );
 }
@@ -34,7 +32,7 @@ function Accion({ a, dia, abrirRevision }: { a: Sugerencia; dia: MiDiaVista; abr
     if (!tarea) return;
     try {
       const r = await api.publicarClickup(tarea.id, texto);
-      setMsg(r.publicado ? 'Publicado en ClickUp.' : 'No se publicó.');
+      setMsg(r.publicado ? 'Publicado' : 'Cancelado');
     } catch (e) {
       setMsg(String(e instanceof Error ? e.message : e));
     }
@@ -42,29 +40,29 @@ function Accion({ a, dia, abrirRevision }: { a: Sugerencia; dia: MiDiaVista; abr
   return (
     <li className={`accion p${Math.min(a.prioridad, 6)}`}>
       <div className="accion-cabeza">
-        <span className="etiqueta-tipo">{NOMBRE_TIPO[a.tipo]}</span>
-        <span>{a.texto}</span>
+        <span className="etiqueta-tipo">{ROTULO[a.tipo]}</span>
+        <span className="texto-accion">{a.texto}</span>
         <span className="botones-accion">
-          {pr && (a.tipo === 'revisar' || a.tipo === 'formato' || a.tipo === 'revision-recibida' || a.tipo === 'ci') && (
+          {pr && ['revisar', 'formato', 'revision-recibida', 'ci'].includes(a.tipo) && (
             <button className="boton secundario" onClick={() => abrirRevision(pr)}>
-              {a.tipo === 'revisar' ? 'Revisar' : 'Ver qué corregir'}
+              Abrir
             </button>
           )}
           {a.preparado && (
             <button className="boton secundario" onClick={() => setAbierta(!abierta)}>
-              {abierta ? 'Cerrar' : 'Preparar comentario'}
+              {abierta ? 'Cerrar' : 'Preparar'}
             </button>
           )}
           {a.tipo === 'abrir-pr' && (
             <button className="boton secundario" onClick={() => void api.copiar(`git switch -c feature/${(dia.saludo || 'yo').toLowerCase()}-${a.ref}`)}>
-              Copiar nombre de rama
+              Copiar rama
             </button>
           )}
         </span>
       </div>
       {abierta && a.preparado && (
         <div className="preparado">
-          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={9} />
+          <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={8} />
           <div className="fila">
             <button className="boton" onClick={() => void publicar()} disabled={/FALTA/.test(texto) || !tarea}>
               Publicar en ClickUp
@@ -72,16 +70,16 @@ function Accion({ a, dia, abrirRevision }: { a: Sugerencia; dia: MiDiaVista; abr
             <button className="boton secundario" onClick={() => void api.copiar(texto)}>
               Copiar
             </button>
-            {/FALTA/.test(texto) && <span className="suave">Completa los campos marcados con FALTA (por ejemplo el SHA).</span>}
+            {/FALTA/.test(texto) && <span className="suave">Completa lo marcado con FALTA.</span>}
+            {msg && <span className="suave">{msg}</span>}
           </div>
-          {msg && <p className="suave">{msg}</p>}
         </div>
       )}
     </li>
   );
 }
 
-export function Inicio({ abrirRevision, version }: { abrirRevision: (n: string) => void; version: number }) {
+export function Inicio({ abrirRevision, version, conectar }: { abrirRevision: (n: string) => void; version: number; conectar: () => void }) {
   const [con, setCon] = useState<Conexion | null>(null);
   const [dia, setDia] = useState<MiDiaVista | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
@@ -110,90 +108,106 @@ export function Inicio({ abrirRevision, version }: { abrirRevision: (n: string) 
     };
   }, [version, cuenta]);
 
-  if (!con) return <div className="columna ancha"><p className="suave">Cargando…</p></div>;
-  const completo = con.github.conectado && con.clickup.conectado;
+  if (!con) return <div className="columna ancha"><div className="esqueletos">{[0, 1, 2].map((i) => <div key={i} className="esqueleto" />)}</div></div>;
+  if (!con.github.conectado && !con.clickup.conectado) {
+    return (
+      <div className="columna ancha">
+        <div className="estado-vacio grande">
+          <p>Conecta GitHub y ClickUp para ver tu día</p>
+          <button className="boton" onClick={conectar}>
+            Conectar ahora
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const urgentes = dia?.acciones.filter((a) => a.prioridad <= 3).length ?? 0;
   return (
     <div className="columna ancha">
-      {!completo && (
-        <>
-          <h2>Conecta tus cuentas</h2>
-          <p className="suave">Con GitHub y ClickUp conectados, Hilo sabe quién eres y te muestra tus tareas, tus PR y qué hacer ahora. No hay nada más que configurar.</p>
-          <Conexiones alCambiar={() => setCuenta((x) => x + 1)} />
-        </>
-      )}
+      <div className="cabecera-dia">
+        <div>
+          <h2>Hola, {dia?.saludo ?? '…'}</h2>
+          <span className="chips-linea">
+            <span className="dist">{dia?.rol ?? '…'}</span>
+            <span className="dist">{con.repo}</span>
+          </span>
+        </div>
+        <button className="boton secundario" onClick={() => setCuenta((x) => x + 1)} disabled={cargando}>
+          {cargando ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+      {avisos.map((a) => (
+        <p key={a} className="mal">
+          {a}
+        </p>
+      ))}
+
+      {cargando && !dia && <div className="esqueletos">{[0, 1, 2].map((i) => <div key={i} className="esqueleto" />)}</div>}
       {dia && (
         <>
-          <div className="cabecera-dia">
-            <div>
-              <h2>Hola, {dia.saludo}</h2>
-              <p className="suave">
-                Rol: {dia.rol} · {con.repo}
-              </p>
+          <div className="stats">
+            <div className="stat">
+              <strong>{dia.tareas.length}</strong>
+              <span>tareas</span>
             </div>
-            <button className="boton secundario" onClick={() => setCuenta((x) => x + 1)} disabled={cargando}>
-              {cargando ? 'Actualizando…' : 'Actualizar'}
-            </button>
+            <div className="stat">
+              <strong>{dia.prs.length}</strong>
+              <span>PR tuyos</span>
+            </div>
+            <div className={`stat${urgentes ? ' alerta' : ''}`}>
+              <strong>{urgentes}</strong>
+              <span>urgentes</span>
+            </div>
+            {dia.rol === 'integrador' && (
+              <div className="stat">
+                <strong>{dia.paraRevisar.length}</strong>
+                <span>por revisar</span>
+              </div>
+            )}
           </div>
-          {avisos.map((a) => (
-            <p key={a} className="mal">
-              {a}
-            </p>
-          ))}
 
-          <h3>Qué hacer ahora</h3>
-          {dia.acciones.length === 0 ? <p className="bien">Nada urgente. Todo lo tuyo está al día.</p> : (
+          <h3>Ahora</h3>
+          {dia.acciones.length === 0 ? <p className="bien">Todo al día.</p> : (
             <ul className="acciones">
-              {dia.acciones.map((a) => (
+              {dia.acciones.slice(0, 8).map((a) => (
                 <Accion key={`${a.tipo}${a.ref}`} a={a} dia={dia} abrirRevision={abrirRevision} />
               ))}
             </ul>
           )}
 
-          <h3>Mis tareas ({dia.tareas.length})</h3>
-          {dia.tareas.length === 0 ? <p className="suave">No tienes tareas abiertas asignadas.</p> : (
-            <table className="tabla">
-              <tbody>
-                {dia.tareas.map((t) => (
-                  <tr key={t.id}>
-                    <td className="mono">{t.codigo}</td>
-                    <td>{t.nombre.replace(/^[A-Z0-9-]+\s*[—–-]\s*/, '')}</td>
-                    <td>{t.estado}</td>
-                    <td>{t.vence ? t.vence.slice(0, 10) : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          <h3>Mis PR ({dia.prs.length})</h3>
-          {dia.prs.length === 0 ? <p className="suave">No tienes PR abiertos.</p> : (
-            <ul className="lista-pr">
-              {dia.prs.map((p) => (
-                <li key={p.numero}>
-                  <button className="enlace" onClick={() => abrirRevision(String(p.numero))}>
-                    #{p.numero}
-                  </button>{' '}
-                  {p.titulo} <Distintivo pr={p} />
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {dia.paraRevisar.length > 0 && (
-            <>
-              <h3>Para revisar ({dia.paraRevisar.length})</h3>
-              <ul className="lista-pr">
-                {dia.paraRevisar.map((p) => (
-                  <li key={p.numero}>
-                    <button className="enlace" onClick={() => abrirRevision(String(p.numero))}>
-                      #{p.numero}
-                    </button>{' '}
-                    {p.titulo} · {p.autor} <Distintivo pr={p} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <div className="dos-listas">
+            <section>
+              <h3>Mis tareas</h3>
+              {dia.tareas.length === 0 ? <p className="vacio-chico">Sin tareas abiertas.</p> : (
+                <ul className="lista-compacta">
+                  {dia.tareas.map((t) => (
+                    <li key={t.id}>
+                      <span className="mono codigo">{t.codigo}</span>
+                      <span className="nombre">{t.nombre.replace(/^[A-Z0-9-]+\s*[—–-]\s*/, '')}</span>
+                      <span className="dist">{t.estado}</span>
+                      {t.vence && <span className={`dist ${new Date(t.vence) < new Date() ? 'mal' : ''}`}>{t.vence.slice(5, 10)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h3>{dia.rol === 'integrador' ? 'PR por revisar' : 'Mis PR'}</h3>
+              {(dia.rol === 'integrador' ? dia.paraRevisar : dia.prs).length === 0 ? <p className="vacio-chico">Ninguno.</p> : (
+                <ul className="lista-compacta">
+                  {(dia.rol === 'integrador' ? dia.paraRevisar : dia.prs).slice(0, 10).map((p) => (
+                    <li key={p.numero}>
+                      <button className="enlace" onClick={() => abrirRevision(String(p.numero))}>
+                        #{p.numero}
+                      </button>
+                      <span className="nombre">{p.titulo}</span>
+                      <Estado pr={p} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
         </>
       )}
     </div>

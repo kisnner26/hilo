@@ -29,6 +29,7 @@ export interface Config {
   repo?: string;
   modelos?: Partial<Record<Funcion, ModeloAsignado>>;
   permitirEditar?: boolean;
+  ahorro?: Partial<AhorroVista>;
 }
 export interface PerfilVista {
   name: string;
@@ -60,7 +61,50 @@ export interface EventoAgente {
   ms?: number;
 }
 
+export interface NotaVista {
+  ruta: string;
+  titulo: string;
+  carpeta: string;
+  resumen: string;
+  palabras: number;
+}
+export interface RevisionVista {
+  numero: number;
+  titulo: string;
+  autor: string;
+  url: string;
+  ci: string;
+  lineas: number;
+  errores: number;
+  avisos: number;
+  hallazgos: { gravedad: 'ERROR' | 'AVISO'; regla: string; mensaje: string; arreglo?: string }[];
+  comentario: string;
+}
+export interface ProgramadaVista {
+  id: 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola';
+  activo: boolean;
+  cadaMin?: number;
+  hora?: string;
+  ultima?: string;
+  resultado?: string;
+}
+export interface AhorroVista {
+  activo: boolean;
+  resumen: boolean;
+  alcance: boolean;
+  extractos: boolean;
+  estiloBreve: boolean;
+  comprimirLogs: boolean;
+  sesionContinua: boolean;
+  respuestasInmediatas: boolean;
+  presupuesto: number;
+  maxSubagentes: number;
+  maxLineasDiff: number;
+  maxCaracteresNota: number;
+}
 export interface Conexion {
+  /** Solo el creador del proyecto ve las descargas. */
+  creador?: boolean;
   github: { conectado: boolean; login?: string; nombre?: string; origen?: 'gh' | 'token'; ghInstalado?: boolean; error?: string };
   clickup: { conectado: boolean; usuario?: string; error?: string };
   repos: string[];
@@ -154,7 +198,7 @@ export interface InstalacionesVista {
 
 declare global {
   interface Window {
-    hilo?: { invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void };
+    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -226,8 +270,19 @@ export const api = {
     oyentesChat.add(cb);
     return () => void oyentesChat.delete(cb);
   },
-  conexion: (): Promise<Conexion> =>
-    enElectron ? inv('conexion:estado') : Promise.resolve({ github: { conectado: true, login: 'aleelezz', nombre: 'Jimmy Galo' }, clickup: { conectado: true, usuario: 'JIMMY ALEJANDRO GALO HERNANDEZ' }, repos: ['Nell16/sistema-evaluaciones'], repo: 'Nell16/sistema-evaluaciones', avisos: true }),
+  conexion: (): Promise<Conexion> => {
+    if (enElectron) return inv('conexion:estado');
+    const q = new URLSearchParams(location.search);
+    const conectado = !q.has('desconectado');
+    return Promise.resolve({
+      github: conectado ? { conectado: true, login: 'aleelezz', nombre: 'Jimmy Galo', origen: 'gh', ghInstalado: true } : { conectado: false, ghInstalado: true },
+      clickup: conectado ? { conectado: true, usuario: 'JIMMY ALEJANDRO GALO HERNANDEZ' } : { conectado: false },
+      repos: ['Nell16/sistema-evaluaciones'],
+      repo: 'Nell16/sistema-evaluaciones',
+      avisos: true,
+      ...(q.get('rol') ? { rol: q.get('rol')! } : {}),
+    });
+  },
   githubToken: (t: string): Promise<{ login: string; nombre: string }> => inv('github:token', t),
   githubBorrarToken: (): Promise<void> => inv('github:borrar-token'),
   diagnostico: (): Promise<Prueba[]> =>
@@ -274,13 +329,15 @@ export const api = {
   perfil: (): Promise<PerfilVista> =>
     enElectron ? inv('perfil:get') : Promise.resolve({ name: 'Sistema de evaluaciones (UAM)', modelos: MODELOS_DEMO, limites: { lineasPorPr: 400 } }),
   abrir: (tipo: 'archivo' | 'carpeta'): Promise<string | undefined> => (enElectron ? inv('dialogo:abrir', tipo) : Promise.resolve(undefined)),
-  notas: (): Promise<{ ruta: string; titulo: string; carpeta: string }[]> =>
+  notas: (): Promise<NotaVista[]> =>
     enElectron
       ? inv('notas:lista')
       : Promise.resolve([
-          { ruta: 'contexto/estado-coordinacion.md', titulo: 'Estado de coordinación', carpeta: 'contexto' },
-          { ruta: 'contexto/plan-particion-41.md', titulo: 'Plan para partir el #41', carpeta: 'contexto' },
-          { ruta: 'contexto/plan-int-05.md', titulo: 'INT-05, publicar la versión estable', carpeta: 'contexto' },
+          { ruta: 'contexto/estado-coordinacion.md', titulo: 'Estado de coordinación', carpeta: 'contexto', resumen: 'Qué está fusionado, qué espera revisión y quién debe qué en cada tarea de BFA.', palabras: 1850 },
+          { ruta: 'contexto/plan-particion-41.md', titulo: 'Plan para partir el #41', carpeta: 'contexto', resumen: 'Piezas del GEN-03-BE con ids Long, en el orden en que entran.', palabras: 620 },
+          { ruta: 'contexto/plan-int-05.md', titulo: 'INT-05, publicar la versión estable', carpeta: 'contexto', resumen: 'Checklist para etiquetar y desplegar el release.', palabras: 310 },
+          { ruta: 'docs/DOC-05-API.md', titulo: 'Contrato API (DOC-05)', carpeta: 'docs', resumen: 'Endpoints E1 a E31, errores comunes y ejemplos.', palabras: 5200 },
+          { ruta: 'docs/FLUJO.md', titulo: 'Flujo acordado', carpeta: 'docs', resumen: 'De la planificación al traspaso: quién hace qué en cada paso.', palabras: 420 },
         ]),
   nota: (ruta: string): Promise<string | undefined> =>
     enElectron ? inv('nota:leer', ruta) : Promise.resolve(`# Vista previa\n\nEn el navegador no hay bóveda conectada: abre la app de escritorio para leer **${ruta}**.\n\n- Las notas son Markdown\n- Los [[enlaces]] forman el grafo`),
@@ -305,6 +362,28 @@ export const api = {
           avisos: [{ regla: 'tamano', mensaje: 'El PR cambia 521 líneas; lo acordado es ≈400.' }],
           verificaciones: ['mvn -f backend/pom.xml spotless:check'],
         }),
+  revisarCola: (): Promise<RevisionVista[]> =>
+    enElectron
+      ? inv('revisar:cola')
+      : Promise.resolve([
+          { numero: 79, titulo: '[BFA-BE-01] Módulo BFA y configuración de las 13 subpruebas', autor: 'Rrodrovan', url: '', ci: 'ok', lineas: 521, errores: 8, avisos: 2, hallazgos: [{ gravedad: 'ERROR', regla: 'titulo', mensaje: 'El título no cumple [BFA-BE-01] descripción.', arreglo: 'Ejemplo: [GEN-01-BE] Consultar catálogo.' }, { gravedad: 'ERROR', regla: 'cuerpo', mensaje: 'El cuerpo sigue con texto de la plantilla.' }, { gravedad: 'AVISO', regla: 'tamano', mensaje: 'El PR cambia 521 líneas; lo acordado es ≈400.' }], comentario: 'Revisión de Integración del #79...' },
+          { numero: 77, titulo: '[BFA-BE-04] Calificador de selección por bloque', autor: 'OctavioPf12', url: '', ci: 'ok', lineas: 225, errores: 0, avisos: 0, hallazgos: [], comentario: 'Revisión de Integración del #77: el formato está completo.' },
+          { numero: 80, titulo: 'Feature/emilio GEN 05 BE', autor: 'emilioriv20', url: '', ci: 'fallo', lineas: 880, errores: 5, avisos: 1, hallazgos: [{ gravedad: 'ERROR', regla: 'rama', mensaje: 'La rama no cumple tipo/nombre-código.' }], comentario: 'Revisión de Integración del #80...' },
+        ]),
+  programadas: (): Promise<{ lista: ProgramadaVista[]; integrador: boolean }> =>
+    enElectron
+      ? inv('programadas:lista')
+      : Promise.resolve({
+          integrador: true,
+          lista: [
+            { id: 'avisos', activo: true, cadaMin: 5, ultima: new Date().toISOString(), resultado: 'Sin novedades' },
+            { id: 'resumen-dia', activo: false, hora: '09:00' },
+            { id: 'revisar-prs', activo: true, cadaMin: 15, resultado: '15 PR revisados, 6 con errores' },
+            { id: 'informe-cola', activo: false, hora: '17:00' },
+          ],
+        }),
+  guardarProgramadas: (l: ProgramadaVista[]): Promise<ProgramadaVista[]> => (enElectron ? inv('programadas:guardar', l) : Promise.resolve(l)),
+  ejecutarProgramada: (id: string): Promise<string> => (enElectron ? inv('programadas:ejecutar', id) : Promise.resolve('Listo (demostración)')),
   hilos: (): Promise<HiloVista[]> => (enElectron ? inv('hilos:lista') : Promise.resolve([])),
   guardarHilo: (h: HiloVista): Promise<HiloVista[]> => inv('hilos:guardar', h),
   contexto: (o: unknown): Promise<PaqueteVista> =>

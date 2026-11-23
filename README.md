@@ -10,8 +10,9 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 |---|---|
 | el integrador revisa el mismo pr varias veces | `hilo revisar <pr>` entrega una sola lista con todo lo que el formato exige |
 | comentarios de clickup incompletos | plantillas de avance, entrega, bloqueo y pregunta, y un validador de lo que llega |
-| la ia gasta tokens releyendo todo | resumen del proyecto (~400 tokens en vez de ~32 mil), vecindad de un nodo, sesión nueva con el hilo, notas recortadas a los párrafos útiles, logs comprimidos, estilo breve en subagentes y medidor de ahorro |
+| la ia gasta tokens releyendo todo (opcional y configurable en ajustes: tres preajustes y cada técnica por separado) | resumen del proyecto (~400 tokens en vez de ~32 mil), vecindad de un nodo, sesión nueva con el hilo, notas recortadas a los párrafos útiles, logs comprimidos, estilo breve en subagentes y medidor de ahorro |
 | la ia pierde el hilo o inventa | el hilo de la tarea se reinyecta en cada turno, y un motor de reglas decide cuándo seguir, preguntar o parar |
+| revisar PR a mano uno por uno | los PR listos se revisan solos; un clic copia o publica la lista de correcciones, y una tarea programada avisa de los nuevos con errores |
 | un solo integrador lo carga todo | reparto por carga entre integradores y métrica de rondas por pr |
 
 ![revisar un pr](docs/img/revisar.png)
