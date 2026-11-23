@@ -64,6 +64,14 @@
     "directories": {
       "output": "release"
     },
-    "electronVersion": "39.8.10"
-  }
+    "electronVersion": "39.8.10",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kisnner26",
+        "repo": "hilo"
+      }
+    ]
+  },
+  "repository": "https://github.com/kisnner26/hilo"
 }
