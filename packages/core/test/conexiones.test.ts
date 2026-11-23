@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { delimiter } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { GitHubApi, ErrorGithub, ampliarPath, buscar, directoriosComunes, errorLegible, mensajeFaltante, prepararPath } from '../src/index.js';
 
 type Llamada = { url: string; metodo: string; auth?: string; cuerpo?: unknown };
@@ -90,7 +90,7 @@ describe('entorno de la app', () => {
   it('conoce las carpetas de Homebrew y de las instalaciones por usuario', () => {
     const d = directoriosComunes('darwin', '/Users/x');
     expect(d).toContain('/opt/homebrew/bin');
-    expect(d).toContain('/Users/x/.local/bin');
+    expect(d).toContain(join('/Users/x', '.local', 'bin'));
     expect(directoriosComunes('win32', 'C:\\Users\\x').some((p) => /GitHub CLI/.test(p))).toBe(true);
   });
 
@@ -99,7 +99,7 @@ describe('entorno de la app', () => {
     process.env.PATH = '/usr/bin';
     const nuevo = prepararPath().split(delimiter);
     process.env.PATH = antes;
-    expect(nuevo).toContain('/opt/homebrew/bin');
+    expect(nuevo).toContain(directoriosComunes()[0]);
     expect(new Set(nuevo).size).toBe(nuevo.length);
   });
 
