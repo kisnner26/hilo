@@ -8,3 +8,5 @@ export * from './decision.js';
 export * from './balance.js';
 export * from './xp.js';
 export * from './agentes.js';
+export * from './github.js';
+export * from './roles.js';

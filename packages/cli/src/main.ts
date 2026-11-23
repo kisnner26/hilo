@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -11,6 +10,7 @@ import {
   cargarBoveda,
   cargarGrafo,
   cargarHilo,
+  cambioDePr,
   cargarPerfil,
   comentarioClickup,
   conDecision,
@@ -70,22 +70,6 @@ function perfilDe(op: Opciones) {
   return cargarPerfil(ruta);
 }
 const raizDatos = (op: Opciones) => resolve(texto(op.raiz, process.env.HILO_HOME ?? process.cwd()));
-
-function gh(...args: string[]): string {
-  return execFileSync('gh', args, { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-/** Trae un PR de GitHub como Cambio: la misma revisión que hoy se hace a mano, en un solo informe. */
-function cambioDePr(numero: string, repo: string): Cambio {
-  const meta = JSON.parse(gh('pr', 'view', numero, '-R', repo, '--json', 'headRefName,title,body,labels')) as {
-    headRefName: string;
-    title: string;
-    body: string;
-    labels: { name: string }[];
-  };
-  const archivos = JSON.parse(gh('api', `repos/${repo}/pulls/${numero}/files`, '--paginate', '--jq', '[.[]|{ruta:.filename,estado:(if .status=="added" then "A" elif .status=="removed" then "D" elif .status=="renamed" then "R" else "M" end),adiciones:.additions,eliminaciones:.deletions}]')) as Cambio['archivos'];
-  return { rama: meta.headRefName, titulo: meta.title, cuerpo: meta.body ?? '', archivos, etiquetas: meta.labels.map((l) => l.name) };
-}
 
 const AYUDA = `hilo — contexto, formatos y decisión para el equipo
 

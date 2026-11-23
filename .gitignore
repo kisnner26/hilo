@@ -5,3 +5,4 @@ release
 .hilo
 *.log
 .DS_Store
+*.tsbuildinfo
