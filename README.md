@@ -10,7 +10,7 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 |---|---|
 | el integrador revisa el mismo pr varias veces | `hilo revisar <pr>` entrega una sola lista con todo lo que el formato exige |
 | comentarios de clickup incompletos | plantillas de avance, entrega, bloqueo y pregunta, y un validador de lo que llega |
-| la ia gasta tokens releyendo todo | paquetes de contexto por rol y por vecindad, con presupuesto de tokens |
+| la ia gasta tokens releyendo todo | resumen del proyecto (~400 tokens en vez de ~32 mil), vecindad de un nodo, sesión nueva con el hilo, notas recortadas a los párrafos útiles, logs comprimidos, estilo breve en subagentes y medidor de ahorro |
 | la ia pierde el hilo o inventa | el hilo de la tarea se reinyecta en cada turno, y un motor de reglas decide cuándo seguir, preguntar o parar |
 | un solo integrador lo carga todo | reparto por carga entre integradores y métrica de rondas por pr |
 
@@ -43,6 +43,10 @@ node packages/cli/dist/main.js instalar-skill   # skill /hilo para claude code
 ```
 
 en ajustes eliges el `graph.json` de graphify y la carpeta de markdown. la app se puede probar sin electron: `npx vite --config apps/desktop/vite.web.config.ts` abre la interfaz con datos de demostración.
+
+## si una conexión falla
+
+en ajustes, conexiones, **probar todas las conexiones** revisa herramientas (git, gh, claude, codex), llavero, github, clickup y suscripciones, y dice qué hacer en cada falla. github funciona con `gh` o con un token personal pegado.
 
 ## suscripción, sin api
 

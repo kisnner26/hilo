@@ -349,7 +349,7 @@ export function AjustesPanel({ perfil, alCambiar }: { perfil: PerfilVista | null
     setConfig(await api.guardarConfig(c));
     alCambiar();
   };
-  const elegir = async (clave: 'grafo' | 'boveda', tipo: 'archivo' | 'carpeta') => {
+  const elegir = async (clave: 'grafo' | 'boveda' | 'proyecto', tipo: 'archivo' | 'carpeta') => {
     const r = await api.abrir(tipo);
     if (r) await guardar({ [clave]: r });
   };
@@ -428,6 +428,7 @@ export function AjustesPanel({ perfil, alCambiar }: { perfil: PerfilVista | null
       <h3>Contexto</h3>
       {fila('Grafo (graph.json de graphify)', config.grafo, () => void elegir('grafo', 'archivo'))}
       {fila('Carpeta de Markdown', config.boveda, () => void elegir('boveda', 'carpeta'))}
+      {fila('Carpeta del repositorio (los agentes leen el código ahí)', config.proyecto, () => void elegir('proyecto', 'carpeta'))}
     </div>
   );
 }

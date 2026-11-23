@@ -24,6 +24,7 @@ export interface Config {
   perfil?: string;
   grafo?: string;
   boveda?: string;
+  proyecto?: string;
   raiz?: string;
   repo?: string;
   modelos?: Partial<Record<Funcion, ModeloAsignado>>;
