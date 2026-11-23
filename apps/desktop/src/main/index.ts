@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, Notification, safeStorage, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -7,6 +7,18 @@ import { promisify } from 'node:util';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
+
+type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola';
+interface Programada {
+  id: TipoProgramada;
+  activo: boolean;
+  /** Cada cuántos minutos (para las periódicas). */
+  cadaMin?: number;
+  /** Hora del día, HH:MM (para las diarias). */
+  hora?: string;
+  ultima?: string;
+  resultado?: string;
+}
 
 interface Config {
   perfil?: string;
@@ -26,6 +38,10 @@ interface Config {
   clickupToken?: string;
   /** Token personal de GitHub pegado a mano (si no, se usa el de `gh`), cifrado con el llavero. */
   githubToken?: string;
+  /** Ahorro de tokens: interruptor general, técnicas y topes. */
+  ahorro?: Partial<core.AjustesAhorro>;
+  /** Tareas programadas: avisos, resumen del día, revisión de PR e informe de cola. */
+  programadas?: Programada[];
   /** Repositorios conectados (dueño/nombre); `repo` es el activo. */
   repos?: string[];
   /** Listas de ClickUp que se siguen. Si no hay, se usan las del perfil. */
@@ -40,6 +56,7 @@ core.prepararPath();
 void core.ampliarPath();
 
 app.setName('Hilo');
+nativeTheme.themeSource = 'dark';
 const rutaConfig = () => join(app.getPath('userData'), 'config.json');
 
 function leerConfig(): Config {
@@ -81,9 +98,13 @@ function crearVentana(): void {
     height: 920,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#000000',
     title: 'Hilo',
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 14 } } : {}),
+    // Vidrio de verdad: macOS con vibrancy y Windows 11 con acrílico; en Linux, fondo oscuro sólido.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 }, vibrancy: 'hud' as const, visualEffectState: 'active' as const, transparent: true, backgroundColor: '#00000000' }
+      : process.platform === 'win32'
+        ? { backgroundMaterial: 'acrylic' as const, backgroundColor: '#00000000' }
+        : { backgroundColor: '#07070b' }),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   ventana.webContents.setWindowOpenHandler(({ url }) => {
@@ -111,6 +132,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
   const raiz = raizDatos();
   const cwd = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : (cfg.boveda ?? raiz);
   const soloLectura = !cfg.permitirEditar;
+  const ah = core.ahorroEfectivo(cfg.ahorro);
   const hilo = p.hiloId ? core.cargarHilo(raiz, p.hiloId) : undefined;
   const recuerdo = hilo ? core.recordatorio(hilo) : `# Hilo nuevo — rol ${p.rol}\nObjetivo: ${p.objetivo}`;
 
@@ -118,7 +140,7 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
     const paquete = core.paqueteDeContexto(grafo, { alcance: { tipo: 'todo' }, rol, conciso: true, sinRuido: true, presupuesto, consulta });
     const extra = core
       .buscarNotas(notas, consulta, 3)
-      .map((x) => `\n## ${x.nota.titulo} (${x.nota.ruta})\n${core.extractoRelevante(x.nota.texto, consulta, 1000)}`)
+      .map((x) => `\n## ${x.nota.titulo} (${x.nota.ruta})\n${ah.extractos ? core.extractoRelevante(x.nota.texto, consulta, ah.maxCaracteresNota) : x.nota.texto.slice(0, ah.maxCaracteresNota)}`)
       .join('\n');
     return paquete.texto + extra;
   };
@@ -127,11 +149,11 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
   const plan = await core.ejecutar({
     asignado: perfil.modelos.orquestador,
     sistema: 'Eres el orquestador. Solo planificas. No inventes datos; si falta información, crea una subtarea que la pida.',
-    prompt: `${recuerdo}\n\n${core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 })}\n${contextoPara(p.objetivo, 'integrador', 700)}\n\n${core.promptOrquestador(p.objetivo, '')}`,
+    prompt: `${recuerdo}\n\n${ah.resumen ? core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }) : ''}\n${contextoPara(p.objetivo, 'integrador', Math.round(ah.presupuesto / 2))}\n\n${core.promptOrquestador(p.objetivo, '')}`,
     cwd,
     soloLectura: true,
   });
-  const subtareas = core.leerSubtareas(plan.texto);
+  const subtareas = core.leerSubtareas(plan.texto).slice(0, ah.maxSubagentes);
   enviar('agente:evento', { fase: 'orquestador', estado: 'fin', texto: plan.texto, subtareas: subtareas.length, ms: plan.duracionMs });
   if (subtareas.length === 0) {
     enviar('agente:evento', { fase: 'fin', estado: 'error', texto: 'El orquestador no devolvió subtareas válidas.' });
@@ -143,8 +165,8 @@ async function orquestar(p: PedidoAgentes): Promise<void> {
     enviar('agente:evento', { fase: 'subagente', rol: s.rol, estado: 'inicio', texto: s.instruccion, modelo: `${asignado.modelo} · ${asignado.esfuerzo}` });
     const r = await core.ejecutar({
       asignado,
-      sistema: core.promptDeRol(s.rol, perfil, s.rol === 'desarrollador' || s.rol === 'tester' ? 'breve' : 'normal'),
-      prompt: `${recuerdo}\n\n${contextoPara(s.consulta, s.rol, 1500)}\n\n## Tarea\n${s.instruccion}`,
+      sistema: core.promptDeRol(s.rol, perfil, ah.estiloBreve && (s.rol === 'desarrollador' || s.rol === 'tester') ? 'breve' : 'normal'),
+      prompt: `${recuerdo}\n\n${contextoPara(s.consulta, s.rol, ah.presupuesto)}\n\n## Tarea\n${s.instruccion}`,
       cwd,
       soloLectura: soloLectura || s.rol !== 'desarrollador',
     });
@@ -174,7 +196,15 @@ function registrarIpc(): void {
     if (!abs.startsWith(resolve(c.boveda))) return undefined;
     return existsSync(abs) ? readFileSync(abs, 'utf8') : undefined;
   });
-  ipcMain.handle('notas:lista', () => cargarTodo().notas.map((n) => ({ ruta: n.ruta, titulo: n.titulo, carpeta: n.carpeta })));
+  ipcMain.handle('notas:lista', () =>
+    cargarTodo().notas.map((n) => ({
+      ruta: n.ruta,
+      titulo: n.titulo,
+      carpeta: n.carpeta,
+      resumen: (n.texto.split(/\n{2,}/).map((x) => x.replace(/^#+\s.*$/gm, '').trim()).find((x) => x.length > 30) ?? '').replace(/\s+/g, ' ').slice(0, 140),
+      palabras: n.texto.split(/\s+/).length,
+    })),
+  );
   ipcMain.handle('sesion:estado', async () => ({ claude: await core.estadoSesion('claude'), codex: await core.estadoSesion('codex') }));
   ipcMain.handle('sesion:iniciar', async (_e, cli: core.CliId) => {
     if (!core.buscar(cli)) throw new Error(core.mensajeFaltante(cli));
@@ -362,11 +392,12 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
   try {
     const perfil = perfilActual();
     const cfg = leerConfig();
+    const ah = core.ahorroEfectivo(cfg.ahorro);
     const repo = repoActivo();
     const dia = await diaCacheado(!conversaciones.has(p.conv));
 
     // Lo que se contesta con datos que ya tenemos no gasta tokens.
-    if (!p.tarea && p.texto) {
+    if (!p.tarea && p.texto && ah.respuestasInmediatas) {
       const intencion = core.detectarIntencion(p.texto);
       if (intencion) {
         emitir({ tipo: 'respuesta', ...core.respuestaDeIntencion(intencion, dia) });
@@ -397,16 +428,18 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
         const gh = await github();
         if (gh) {
           informe = core.formatearInforme(core.informe(await gh.api.cambioDePr(repo, pr.numero), perfil));
-          diff = await gh.api.diff(repo, pr.numero, 300).catch(() => undefined);
+          const crudo = await gh.api.diff(repo, pr.numero, ah.maxLineasDiff).catch(() => undefined);
+          diff = crudo && ah.comprimirLogs ? core.comprimirSalida(crudo, ah.maxLineasDiff) : crudo;
         }
       }
       prompt = core.promptTarea(accion, ref, detalle, pr, informe, diff);
     } else if (notas.length > 0 && p.texto) {
-      const extra = core.buscarNotas(notas, p.texto, 2).map((x) => `## ${x.nota.titulo}\n${core.extractoRelevante(x.nota.texto, p.texto!, 700)}`).join('\n\n');
+      const extra = core.buscarNotas(notas, p.texto, ah.alcance ? 2 : 4).map((x) => `## ${x.nota.titulo}\n${ah.extractos ? core.extractoRelevante(x.nota.texto, p.texto!, ah.maxCaracteresNota) : x.nota.texto.slice(0, ah.maxCaracteresNota)}`).join('\n\n');
       if (extra) prompt = `${p.texto}\n\n[Notas del proyecto que pueden ayudar]\n${extra}`;
     }
 
-    const sistema = core.promptSistemaChat(perfil, dia, core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }), repo);
+    const contextoBase = ah.resumen ? core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }) : core.paqueteDeContexto(grafo, { alcance: { tipo: 'todo' }, rol: dia.rol, conciso: true, sinRuido: true, presupuesto: ah.presupuesto }).texto;
+    const sistema = core.promptSistemaChat(perfil, dia, contextoBase, repo, ah.estiloBreve ? 'breve' : 'normal');
     const asignado = perfil.modelos.asistente;
     const cwd = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : (cfg.boveda ?? raizDatos());
     emitir({ tipo: 'inicio', modelo: `${asignado.modelo} · ${asignado.esfuerzo}` });
@@ -416,7 +449,7 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
       prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`,
       cwd,
       soloLectura: true,
-      ...(asignado.cli === 'claude' ? { sesion: { id: conv.sesion, reanudar: conv.creada } } : {}),
+      ...(asignado.cli === 'claude' ? { sesion: ah.sesionContinua ? { id: conv.sesion, reanudar: conv.creada } : { id: randomUUID(), reanudar: false } } : {}),
       alTexto: (delta) => emitir({ tipo: 'delta', texto: delta }),
     });
     if (r.codigoSalida !== 0 && !r.texto) {
@@ -554,18 +587,172 @@ async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: str
 }
 
 let vistas = new Set<string>();
-async function vigilar(): Promise<void> {
-  if (!leerConfig().avisos) return;
+async function ejecutarAvisos(): Promise<string> {
   try {
     const { dia } = await calcularMiDia();
     const actuales = new Set(dia.acciones.map((a) => `${a.tipo}:${a.ref}`));
     const nuevas = dia.acciones.filter((a) => !vistas.has(`${a.tipo}:${a.ref}`) && a.prioridad <= 3);
-    if (vistas.size > 0 && nuevas.length > 0 && Notification.isSupported()) {
-      new Notification({ title: 'Hilo', body: nuevas.length === 1 ? nuevas[0]!.texto : `${nuevas.length} cosas nuevas por hacer. La primera: ${nuevas[0]!.texto}` }).show();
-    }
+    const primera = vistas.size === 0;
     vistas = actuales;
+    if (!primera && nuevas.length > 0) {
+      avisar(nuevas.length === 1 ? nuevas[0]!.texto : `${nuevas.length} cosas nuevas por hacer. La primera: ${nuevas[0]!.texto}`);
+      return `${nuevas.length} urgente${nuevas.length === 1 ? '' : 's'} nueva${nuevas.length === 1 ? '' : 's'}`;
+    }
+    return primera ? `Línea base tomada: ${actuales.size} pendientes` : 'Sin novedades';
+  } catch (e) {
+    return `No se pudo revisar: ${core.errorLegible(e)}`;
+  }
+}
+
+function avisar(texto: string): void {
+  if (Notification.isSupported()) new Notification({ title: 'Hilo', body: texto }).show();
+}
+
+// ---------- Revisión automática de PR (integradores) ----------
+
+interface RevisionPr {
+  numero: number;
+  titulo: string;
+  autor: string;
+  url: string;
+  ci: string;
+  lineas: number;
+  errores: number;
+  avisos: number;
+  sha?: string;
+  hallazgos: { gravedad: 'ERROR' | 'AVISO'; regla: string; mensaje: string; arreglo?: string }[];
+  comentario: string;
+}
+const cacheRevision = new Map<string, RevisionPr>();
+
+async function esIntegrador(): Promise<boolean> {
+  const cfg = leerConfig();
+  if (cfg.rol) return cfg.rol === 'integrador';
+  const gh = await github();
+  if (!gh) return false;
+  try {
+    return perfilActual().integradores.includes((await gh.api.yo()).login);
   } catch {
-    /* sin red o sin sesión: se reintenta en el siguiente ciclo */
+    return false;
+  }
+}
+
+/** Revisa de una vez el formato de todos los PR listos de otras personas. Lo ya revisado en el mismo commit sale de la caché. */
+async function revisarCola(): Promise<RevisionPr[]> {
+  const gh = await github();
+  if (!gh) throw new Error('Conecta GitHub en Ajustes para revisar PR.');
+  const perfil = perfilActual();
+  const repo = repoActivo();
+  const yo = await gh.api.yo();
+  const prs = (await gh.api.prsAbiertos(repo, yo.login)).filter((p) => !p.borrador && p.autor !== yo.login);
+  const salida: RevisionPr[] = [];
+  await core.correrSubagentes(prs, 4, async (p) => {
+    const clave = `${repo}#${p.numero}:${p.sha ?? ''}`;
+    let r: RevisionPr | undefined = p.sha ? cacheRevision.get(clave) : undefined;
+    if (!r) {
+      const inf = core.informe(await gh.api.cambioDePr(repo, p.numero), perfil);
+      r = {
+        numero: p.numero,
+        titulo: p.titulo,
+        autor: p.autor,
+        url: p.url,
+        ci: p.ci,
+        lineas: inf.lineas,
+        errores: inf.errores.length,
+        avisos: inf.avisos.length,
+        ...(p.sha ? { sha: p.sha } : {}),
+        hallazgos: [
+          ...inf.errores.map((h) => ({ gravedad: 'ERROR' as const, regla: h.regla, mensaje: h.mensaje, ...(h.arreglo ? { arreglo: h.arreglo } : {}) })),
+          ...inf.avisos.map((h) => ({ gravedad: 'AVISO' as const, regla: h.regla, mensaje: h.mensaje, ...(h.arreglo ? { arreglo: h.arreglo } : {}) })),
+        ],
+        comentario: core.comentarioDeRevision(p.numero, inf),
+      };
+      if (p.sha) cacheRevision.set(clave, r);
+    }
+    if (r) salida.push(r);
+  });
+  return salida.sort((a, b) => b.errores - a.errores || a.numero - b.numero);
+}
+
+// ---------- Tareas programadas ----------
+
+const PROGRAMADAS_BASE: Programada[] = [
+  { id: 'avisos', activo: false, cadaMin: 5 },
+  { id: 'resumen-dia', activo: false, hora: '09:00' },
+  { id: 'revisar-prs', activo: false, cadaMin: 15 },
+  { id: 'informe-cola', activo: false, hora: '17:00' },
+];
+
+function programadas(): Programada[] {
+  const c = leerConfig();
+  return PROGRAMADAS_BASE.map((d) => {
+    const g = c.programadas?.find((x) => x.id === d.id);
+    return { ...d, ...(g ?? {}), ...(d.id === 'avisos' && !g && c.avisos ? { activo: true } : {}) };
+  });
+}
+
+let reportadosRevision = new Set<string>();
+
+async function ejecutarProgramada(p: Programada): Promise<string> {
+  if (p.id === 'avisos') return ejecutarAvisos();
+  if (p.id === 'resumen-dia') {
+    const { dia } = await calcularMiDia();
+    const texto = `${dia.tareas.length} tarea${dia.tareas.length === 1 ? '' : 's'}, ${dia.prs.length} PR tuyo${dia.prs.length === 1 ? '' : 's'} y ${dia.acciones.filter((a) => a.prioridad <= 3).length} urgente(s).${dia.acciones[0] ? ` Primero: ${dia.acciones[0].texto}` : ''}`;
+    avisar(`Tu día: ${texto}`);
+    return texto;
+  }
+  if (p.id === 'revisar-prs') {
+    if (!(await esIntegrador())) return 'Solo para integradores';
+    const r = await revisarCola();
+    const nuevos = r.filter((x) => x.errores > 0 && !reportadosRevision.has(`${x.numero}:${x.sha ?? ''}`));
+    const primera = reportadosRevision.size === 0;
+    for (const x of r) if (x.errores > 0) reportadosRevision.add(`${x.numero}:${x.sha ?? ''}`);
+    if (!primera && nuevos.length > 0) avisar(`${nuevos.length} PR con errores de formato: ${nuevos.slice(0, 5).map((x) => `#${x.numero}`).join(', ')}. Ábrelos en Revisar PR.`);
+    return `${r.length} PR revisados, ${r.filter((x) => x.errores > 0).length} con errores${!primera && nuevos.length ? ` (${nuevos.length} nuevos)` : ''}`;
+  }
+  const gh = await github();
+  if (!gh) return 'GitHub sin conectar';
+  const perfil = perfilActual();
+  const cola = await gh.api.cola(repoActivo(), perfil.integradores);
+  const m = core.estadistica(cola, perfil.integradores);
+  const texto = `${m.prs} PR abiertos, ${m.conMasDeTresRondas.length} con más de 3 rondas, ${m.rondasPromedio.toFixed(1)} rondas en promedio`;
+  avisar(`Cola de revisión: ${texto}`);
+  return texto;
+}
+
+function vencida(p: Programada, ahora = new Date()): boolean {
+  if (!p.activo) return false;
+  const ultima = p.ultima ? new Date(p.ultima) : undefined;
+  if (p.cadaMin) return !ultima || ahora.getTime() - ultima.getTime() >= p.cadaMin * 60_000;
+  if (p.hora) {
+    const [h, m] = p.hora.split(':').map(Number);
+    const hoy = new Date(ahora);
+    hoy.setHours(h ?? 0, m ?? 0, 0, 0);
+    return ahora >= hoy && (!ultima || ultima < hoy);
+  }
+  return false;
+}
+
+function guardarEjecucion(id: TipoProgramada, resultado: string): void {
+  const c = leerConfig();
+  const lista = programadas().map((x) => (x.id === id ? { ...x, ultima: new Date().toISOString(), resultado } : x));
+  guardarConfig({ ...c, programadas: lista });
+}
+
+let corriendoProgramadas = false;
+async function tickProgramadas(): Promise<void> {
+  if (corriendoProgramadas) return;
+  corriendoProgramadas = true;
+  try {
+    for (const p of programadas().filter((x) => vencida(x))) {
+      try {
+        guardarEjecucion(p.id, await ejecutarProgramada(p));
+      } catch (e) {
+        guardarEjecucion(p.id, `Error: ${core.errorLegible(e)}`);
+      }
+    }
+  } finally {
+    corriendoProgramadas = false;
   }
 }
 
@@ -591,7 +778,8 @@ function registrarIpcConexiones(): void {
         clickupEstado = { conectado: false, error: core.errorLegible(e) };
       }
     }
-    return { github: { ...github_, ghInstalado: Boolean(core.buscar('gh')) }, clickup: clickupEstado, repos: c.repos ?? [], repo: repoActivo(), avisos: Boolean(c.avisos), rol: c.rol };
+    const creador = Boolean(github_.login && github_.login.toLowerCase() === ((c.repoHilo ?? 'kisnner26/hilo').split('/')[0] ?? '').toLowerCase());
+    return { github: { ...github_, ghInstalado: Boolean(core.buscar('gh')) }, clickup: clickupEstado, creador, repos: c.repos ?? [], repo: repoActivo(), avisos: Boolean(c.avisos), rol: c.rol };
   });
   ipcMain.handle('github:conectar', () =>
     new Promise<{ login?: string }>((resolver, rechazar) => {
@@ -658,6 +846,19 @@ function registrarIpcConexiones(): void {
     guardarConfig(rol ? { ...resto, rol } : resto);
   });
   ipcMain.handle('midia:cargar', () => calcularMiDia());
+  ipcMain.handle('revisar:cola', () => revisarCola());
+  ipcMain.handle('programadas:lista', async () => ({ lista: programadas(), integrador: await esIntegrador() }));
+  ipcMain.handle('programadas:guardar', (_e, lista: Programada[]) => {
+    guardarConfig({ ...leerConfig(), programadas: lista });
+    return programadas();
+  });
+  ipcMain.handle('programadas:ejecutar', async (_e, id: TipoProgramada) => {
+    const p = programadas().find((x) => x.id === id);
+    if (!p) throw new Error('Tarea desconocida.');
+    const r = await ejecutarProgramada(p);
+    guardarEjecucion(id, r);
+    return r;
+  });
   ipcMain.handle('chat:enviar', (_e, p: PedidoChat) => void turnoDeChat(p));
   ipcMain.handle('chat:nueva', (_e, conv: string) => {
     conversaciones.delete(conv);
@@ -667,6 +868,9 @@ function registrarIpcConexiones(): void {
   ipcMain.handle('instalaciones:conteo', async () => {
     const repo = leerConfig().repoHilo ?? 'kisnner26/hilo';
     const gh = await github();
+    // Solo el creador del proyecto ve las descargas.
+    const yo = gh ? await gh.api.yo().catch(() => undefined) : undefined;
+    if (!yo || yo.login.toLowerCase() !== (repo.split('/')[0] ?? '').toLowerCase()) throw new Error('Solo el creador del proyecto puede ver las descargas.');
     const rel = gh ? await gh.api.releases(repo) : await core.publicoReleases(repo);
     return { repo, releases: rel.map((r) => ({ ...r, total: r.activos.reduce((n, a) => n + a.descargas, 0) })) };
   });
@@ -676,8 +880,8 @@ void app.whenReady().then(() => {
   registrarIpc();
   registrarIpcExtra();
   registrarIpcConexiones();
-  setInterval(() => void vigilar(), 5 * 60_000);
-  setTimeout(() => void vigilar(), 20_000);
+  setInterval(() => void tickProgramadas(), 60_000);
+  setTimeout(() => void tickProgramadas(), 20_000);
   crearVentana();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && crearVentana());
 });

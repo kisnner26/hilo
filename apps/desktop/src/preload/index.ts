@@ -41,9 +41,14 @@ const CANALES = [
   'contexto:sesion-nueva',
   'chat:enviar',
   'chat:nueva',
+  'revisar:cola',
+  'programadas:lista',
+  'programadas:guardar',
+  'programadas:ejecutar',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
+  plataforma: process.platform,
   invocar: (canal: (typeof CANALES)[number], ...args: unknown[]) => {
     if (!CANALES.includes(canal)) throw new Error(`Canal no permitido: ${canal}`);
     return ipcRenderer.invoke(canal, ...args);
