@@ -28,7 +28,11 @@ const POR_ROL: Record<RolId, string[]> = {
 };
 
 /** Instrucciones fijas del rol: van en el prompt de sistema para que el caché de prompts las reutilice. */
-export function promptDeRol(rol: RolId, p: Perfil): string {
+export type Estilo = 'normal' | 'breve';
+
+const BREVE = 'Responde corto: sin preámbulo, sin repetir la pregunta, listas de una línea. Solo lo que cambia o falta.';
+
+export function promptDeRol(rol: RolId, p: Perfil, estilo: Estilo = 'normal'): string {
   const limites = `Límite por PR: ${p.limites.lineasPorPr} líneas. Rama: ${p.rama.ejemplo}. Título: ${p.titulo.ejemplo}.`;
-  return [`Eres el agente de ${rol} del proyecto ${p.name}.`, ...COMUN, ...POR_ROL[rol], limites].join('\n');
+  return [`Eres el agente de ${rol} del proyecto ${p.name}.`, ...COMUN, ...POR_ROL[rol], limites, ...(estilo === 'breve' ? [BREVE] : [])].join('\n');
 }
