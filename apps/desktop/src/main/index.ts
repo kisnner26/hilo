@@ -109,7 +109,7 @@ function crearVentana(): void {
     return { action: 'deny' };
   });
   if (process.env.ELECTRON_RENDERER_URL) void ventana.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void ventana.loadFile(join(__dirname, '../renderer/index.html'));
+  else void ventana.loadFile(join(__dirname, '../renderer/index.html'), process.env.HILO_DEMO ? { query: { demo: '1', rol: 'integrador' } } : undefined);
 }
 
 const enviar = (canal: string, datos: unknown) => ventana?.webContents.send(canal, datos);

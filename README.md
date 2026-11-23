@@ -2,7 +2,9 @@
 
 app de escritorio para que un equipo entregue completo a la primera. junta el grafo del proyecto, las notas en markdown, los formatos acordados y un agente de claude code o codex, todo con tu suscripción y sin claves de api.
 
-![grafo](docs/img/grafo.png)
+![asistente](docs/img/asistente.png)
+
+![mi día](docs/img/mi-dia.png)
 
 ## qué resuelve
 
@@ -15,7 +17,15 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 | revisar PR a mano uno por uno | los PR listos se revisan solos; un clic copia o publica la lista de correcciones, y una tarea programada avisa de los nuevos con errores |
 | un solo integrador lo carga todo | reparto por carga entre integradores y métrica de rondas por pr |
 
-![revisar un pr](docs/img/revisar.png)
+![revisar pr](docs/img/revisar-pr.png)
+
+![notas](docs/img/notas.png)
+
+![grafo](docs/img/grafo.png)
+
+![ahorro de tokens](docs/img/ahorro.png)
+
+![ayuda](docs/img/ayuda.png)
 
 ## instalar
 

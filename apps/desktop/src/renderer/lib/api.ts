@@ -202,7 +202,9 @@ declare global {
   }
 }
 
-export const enElectron = typeof window !== 'undefined' && Boolean(window.hilo);
+/** Con ?demo en la dirección, la app usa datos de demostración aunque corra en Electron (para capturas y pruebas). */
+const demoForzada = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+export const enElectron = typeof window !== 'undefined' && Boolean(window.hilo) && !demoForzada;
 const inv = <T>(canal: string, ...a: unknown[]) => window.hilo!.invocar(canal, ...a) as Promise<T>;
 
 interface GrafoCrudo {
@@ -221,20 +223,20 @@ const MODELOS_DEMO: PerfilVista['modelos'] = {
 
 /** En el navegador (sin Electron) responde con datos de demostración para poder ver y probar la interfaz. */
 const DEMO_DIA: MiDiaVista = {
-  saludo: 'Jimmy',
+  saludo: 'Ana',
   rol: 'desarrollador',
   tareas: [
-    { id: '1', codigo: 'GEN-01-FE', nombre: 'GEN-01-FE — catálogo y detalle', estado: 'in progress', asignados: ['JIMMY'], dependeDe: [] },
-    { id: '2', codigo: 'UI-02', nombre: 'UI-02 — navegación y flujo', estado: 'Open', asignados: ['JIMMY'], vence: '2026-11-18T10:00:00Z', dependeDe: [] },
-    { id: '3', codigo: 'GEN-04-FE', nombre: 'GEN-04-FE — finalización', estado: 'Open', asignados: ['JIMMY'], dependeDe: ['x'] },
+    { id: '1', codigo: 'GEN-01-FE', nombre: 'GEN-01-FE — catálogo y detalle', estado: 'in progress', asignados: ['ANA PEREZ'], dependeDe: [] },
+    { id: '2', codigo: 'UI-02', nombre: 'UI-02 — navegación y flujo', estado: 'Open', asignados: ['ANA PEREZ'], vence: '2026-11-18T10:00:00Z', dependeDe: [] },
+    { id: '3', codigo: 'GEN-04-FE', nombre: 'GEN-04-FE — finalización', estado: 'Open', asignados: ['ANA PEREZ'], dependeDe: ['x'] },
   ],
-  prs: [{ numero: 42, titulo: '[GEN-01-FE] catálogo de tests', autor: 'aleelezz', rama: 'feature/jimmy-GEN-01-FE', borrador: true, url: 'https://github.com/Nell16/sistema-evaluaciones/pull/42', ci: 'fallo', revision: 'requerida', estadoFusion: 'BEHIND', pidenMiRevision: false, erroresDeFormato: 2 }],
+  prs: [{ numero: 42, titulo: '[GEN-01-FE] catálogo de tests', autor: 'ana-dev', rama: 'feature/ana-GEN-01-FE', borrador: true, url: 'https://github.com/Nell16/sistema-evaluaciones/pull/42', ci: 'fallo', revision: 'requerida', estadoFusion: 'BEHIND', pidenMiRevision: false, erroresDeFormato: 2 }],
   paraRevisar: [],
   acciones: [
     { prioridad: 1, tipo: 'ci', texto: 'El CI del #42 falló: corrígelo antes de pedir revisión.', ref: '#42' },
     { prioridad: 2, tipo: 'formato', texto: 'El #42 tiene 2 error(es) de formato: corrígelos de una vez.', ref: '#42' },
     { prioridad: 3, tipo: 'vencida', texto: 'UI-02 venció el 2026-11-18: entrega o avisa una fecha nueva.', ref: 'UI-02' },
-    { prioridad: 5, tipo: 'entrega', texto: 'GEN-01-FE tiene el PR #42 pero sigue en "in progress": comenta la entrega.', ref: 'GEN-01-FE', preparado: 'Entrega GEN-01-FE\n\nEnlace: https://github.com/Nell16/sistema-evaluaciones/pull/42\nSHA probado: FALTA\n\nContribución de cada participante:\n- JIMMY\n\nPendiente del equipo (Integración, Testing, Documentación):\n- testing-ok y revisión de Integración' },
+    { prioridad: 5, tipo: 'entrega', texto: 'GEN-01-FE tiene el PR #42 pero sigue en "in progress": comenta la entrega.', ref: 'GEN-01-FE', preparado: 'Entrega GEN-01-FE\n\nEnlace: https://github.com/Nell16/sistema-evaluaciones/pull/42\nSHA probado: FALTA\n\nContribución de cada participante:\n- ANA PEREZ\n\nPendiente del equipo (Integración, Testing, Documentación):\n- testing-ok y revisión de Integración' },
     { prioridad: 6, tipo: 'espera', texto: 'GEN-04-FE espera a GEN-04-BE.', ref: 'GEN-04-FE' },
   ],
 };
@@ -275,8 +277,8 @@ export const api = {
     const q = new URLSearchParams(location.search);
     const conectado = !q.has('desconectado');
     return Promise.resolve({
-      github: conectado ? { conectado: true, login: 'aleelezz', nombre: 'Jimmy Galo', origen: 'gh', ghInstalado: true } : { conectado: false, ghInstalado: true },
-      clickup: conectado ? { conectado: true, usuario: 'JIMMY ALEJANDRO GALO HERNANDEZ' } : { conectado: false },
+      github: conectado ? { conectado: true, login: 'ana-dev', nombre: 'Ana Pérez', origen: 'gh', ghInstalado: true } : { conectado: false, ghInstalado: true },
+      clickup: conectado ? { conectado: true, usuario: 'ANA PEREZ' } : { conectado: false },
       repos: ['Nell16/sistema-evaluaciones'],
       repo: 'Nell16/sistema-evaluaciones',
       avisos: true,
@@ -290,7 +292,7 @@ export const api = {
       ? inv('diagnostico:correr')
       : Promise.resolve([
           { grupo: 'Herramientas', nombre: 'GitHub CLI', estado: 'ok', detalle: '/opt/homebrew/bin/gh' },
-          { grupo: 'GitHub', nombre: 'Cuenta', estado: 'ok', detalle: 'aleelezz · token de gh' },
+          { grupo: 'GitHub', nombre: 'Cuenta', estado: 'ok', detalle: 'ana-dev · token de gh' },
           { grupo: 'ClickUp', nombre: 'Cuenta', estado: 'error', detalle: 'Sin conectar.', ayuda: 'Pega tu token personal en Ajustes, Conexiones.' },
         ]),
   resumen: (): Promise<PaqueteVista> => (enElectron ? inv('contexto:resumen') : Promise.resolve({ texto: '## Resumen del proyecto (demo)', tokens: 420, tokensTodo: 9800, ahorro: 0.96 })),
@@ -310,8 +312,11 @@ export const api = {
   cola: (): Promise<ColaVista> =>
     enElectron
       ? inv('cola:cargar')
-      : Promise.resolve({ cola: [{ numero: 79, autor: 'Rrodrovan', rondas: 3, lineas: 521, listo: true }, { numero: 42, autor: 'aleelezz', rondas: 2, lineas: 400, listo: false }], asignaciones: [{ numero: 79, integrador: 'over2099', motivo: 'menor carga' }], metricas: { prs: 2, rondasPromedio: 2.5, conMasDeTresRondas: [], cargaPorIntegrador: { kisnner26: 5, over2099: 0 }, concentracion: 1 }, integradores: ['kisnner26', 'over2099'] }),
-  plan: (o: { dias: number; capacidad: number }): Promise<PlanVista> => inv('plan:generar', o),
+      : Promise.resolve({ cola: [{ numero: 79, autor: 'luis-dev', rondas: 3, lineas: 521, listo: true }, { numero: 42, autor: 'ana-dev', rondas: 2, lineas: 400, listo: false }], asignaciones: [{ numero: 79, integrador: 'over2099', motivo: 'menor carga' }], metricas: { prs: 2, rondasPromedio: 2.5, conMasDeTresRondas: [], cargaPorIntegrador: { kisnner26: 5, over2099: 0 }, concentracion: 1 }, integradores: ['kisnner26', 'over2099'] }),
+  plan: (o: { dias: number; capacidad: number }): Promise<PlanVista> =>
+    enElectron
+      ? inv('plan:generar', o)
+      : Promise.resolve({ tareas: 24, desbordes: [], plan: [1, 2, 3, 4, 5].map((d) => ({ dia: d, integracion: '', piezas: [{ codigo: `GEN-0${d}-BE`, pieza: 'pieza', lineas: 300, rol: 'desarrollador' }, { codigo: `GEN-0${d}-TEST`, pieza: 'pruebas', lineas: 200, rol: 'tester' }] })) }),
   publicarGithub: (numero: string, texto: string): Promise<{ publicado: boolean; enlace?: string }> => inv('publicar:github', { numero, texto }),
   publicarClickup: (tareaId: string, texto: string): Promise<{ publicado: boolean; id?: string }> => inv('publicar:clickup', { tareaId, texto }),
   instalaciones: (): Promise<InstalacionesVista> => inv('instalaciones:conteo'),
@@ -340,7 +345,29 @@ export const api = {
           { ruta: 'docs/FLUJO.md', titulo: 'Flujo acordado', carpeta: 'docs', resumen: 'De la planificación al traspaso: quién hace qué en cada paso.', palabras: 420 },
         ]),
   nota: (ruta: string): Promise<string | undefined> =>
-    enElectron ? inv('nota:leer', ruta) : Promise.resolve(`# Vista previa\n\nEn el navegador no hay bóveda conectada: abre la app de escritorio para leer **${ruta}**.\n\n- Las notas son Markdown\n- Los [[enlaces]] forman el grafo`),
+    enElectron
+      ? inv('nota:leer', ruta)
+      : Promise.resolve(`# Estado de coordinación
+
+Corte de la semana. Lo que entró, lo que espera revisión y quién debe qué.
+
+## Qué entró a main
+- **GEN-01-BE** (catálogo y detalle): fusionado con \`ci-ok\` y \`testing-ok\`.
+- **GEN-07-BE** (versionado de formularios): fusionado.
+- Contrato E1 a E31 publicado en \`docs/api/openapi.yaml\`.
+
+## Espera revisión
+- **BFA-BE-01**: falta corregir título y cuerpo del PR.
+- **BFA-BE-04**: espera la etiqueta \`testing-ok\`.
+
+## Decisiones
+1. El dueño del modelo \`Evaluacion\` es el PR del motor común, con ids \`Long\`.
+2. Los errores se manejan con un manejador acotado por controlador.
+
+## Pendiente
+- Partir el motor común en piezas de unas 400 líneas.
+- Definir quién persiste la calificación y los puntajes.
+`),
   sesiones: (): Promise<{ claude: EstadoSesion; codex: EstadoSesion }> =>
     enElectron
       ? inv('sesion:estado')
@@ -366,9 +393,9 @@ export const api = {
     enElectron
       ? inv('revisar:cola')
       : Promise.resolve([
-          { numero: 79, titulo: '[BFA-BE-01] Módulo BFA y configuración de las 13 subpruebas', autor: 'Rrodrovan', url: '', ci: 'ok', lineas: 521, errores: 8, avisos: 2, hallazgos: [{ gravedad: 'ERROR', regla: 'titulo', mensaje: 'El título no cumple [BFA-BE-01] descripción.', arreglo: 'Ejemplo: [GEN-01-BE] Consultar catálogo.' }, { gravedad: 'ERROR', regla: 'cuerpo', mensaje: 'El cuerpo sigue con texto de la plantilla.' }, { gravedad: 'AVISO', regla: 'tamano', mensaje: 'El PR cambia 521 líneas; lo acordado es ≈400.' }], comentario: 'Revisión de Integración del #79...' },
-          { numero: 77, titulo: '[BFA-BE-04] Calificador de selección por bloque', autor: 'OctavioPf12', url: '', ci: 'ok', lineas: 225, errores: 0, avisos: 0, hallazgos: [], comentario: 'Revisión de Integración del #77: el formato está completo.' },
-          { numero: 80, titulo: 'Feature/emilio GEN 05 BE', autor: 'emilioriv20', url: '', ci: 'fallo', lineas: 880, errores: 5, avisos: 1, hallazgos: [{ gravedad: 'ERROR', regla: 'rama', mensaje: 'La rama no cumple tipo/nombre-código.' }], comentario: 'Revisión de Integración del #80...' },
+          { numero: 79, titulo: '[BFA-BE-01] Módulo BFA y configuración de las subpruebas', autor: 'luis-dev', url: '', ci: 'ok', lineas: 521, errores: 8, avisos: 2, hallazgos: [{ gravedad: 'ERROR', regla: 'titulo', mensaje: 'El título no cumple [BFA-BE-01] descripción.', arreglo: 'Ejemplo: [GEN-01-BE] Consultar catálogo.' }, { gravedad: 'ERROR', regla: 'cuerpo', mensaje: 'El cuerpo sigue con texto de la plantilla.' }, { gravedad: 'AVISO', regla: 'tamano', mensaje: 'El PR cambia 521 líneas; lo acordado es ≈400.' }], comentario: 'Revisión de Integración del #79...' },
+          { numero: 77, titulo: '[BFA-BE-04] Calificador de selección por bloque', autor: 'marta-fe', url: '', ci: 'ok', lineas: 225, errores: 0, avisos: 0, hallazgos: [], comentario: 'Revisión de Integración del #77: el formato está completo.' },
+          { numero: 80, titulo: 'Feature/pedro GEN 05 BE', autor: 'pedro-be', url: '', ci: 'fallo', lineas: 880, errores: 5, avisos: 1, hallazgos: [{ gravedad: 'ERROR', regla: 'rama', mensaje: 'La rama no cumple tipo/nombre-código.' }], comentario: 'Revisión de Integración del #80...' },
         ]),
   programadas: (): Promise<{ lista: ProgramadaVista[]; integrador: boolean }> =>
     enElectron
@@ -384,7 +411,12 @@ export const api = {
         }),
   guardarProgramadas: (l: ProgramadaVista[]): Promise<ProgramadaVista[]> => (enElectron ? inv('programadas:guardar', l) : Promise.resolve(l)),
   ejecutarProgramada: (id: string): Promise<string> => (enElectron ? inv('programadas:ejecutar', id) : Promise.resolve('Listo (demostración)')),
-  hilos: (): Promise<HiloVista[]> => (enElectron ? inv('hilos:lista') : Promise.resolve([])),
+  hilos: (): Promise<HiloVista[]> =>
+    enElectron
+      ? inv('hilos:lista')
+      : Promise.resolve([
+          { id: 'gen-01-fe', rol: 'desarrollador', objetivo: 'Pantalla de catálogo y detalle de tests', tarea: 'GEN-01-FE', plan: [{ texto: 'Lista del catálogo con estados de carga y error', hecho: true }, { texto: 'Detalle con subpruebas', hecho: false }, { texto: 'Pruebas de ambas pantallas', hecho: false }], decisiones: [{ fecha: '2026-11-23', texto: 'Usar el cliente HTTP común', motivo: 'sin duplicar tipos' }], abiertas: [], prohibido: [], actualizado: '2026-11-23T12:00:00Z' },
+        ]),
   guardarHilo: (h: HiloVista): Promise<HiloVista[]> => inv('hilos:guardar', h),
   contexto: (o: unknown): Promise<PaqueteVista> =>
     enElectron ? inv('contexto:paquete', o) : Promise.resolve({ texto: '## Contexto del grafo\n- (demo)', tokens: 573, tokensTodo: 9800, ahorro: 0.94, nodos: 23, recortado: false }),
