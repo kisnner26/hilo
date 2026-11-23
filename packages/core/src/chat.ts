@@ -2,7 +2,7 @@ import { extractoRelevante } from './ahorro.js';
 import type { TareaClickup } from './clickup.js';
 import type { MiDia, PrResumen } from './midia.js';
 import type { Perfil } from './profile.js';
-import { promptDeRol } from './roles.js';
+import { promptDeRol, type Estilo } from './roles.js';
 
 /** Chat libre: lo que se contesta sin gastar tokens (datos que ya tenemos) y cómo se arma el contexto del agente. */
 
@@ -86,9 +86,9 @@ export function respuestaDeIntencion(i: Exclude<Intencion, null>, dia: MiDia): R
 const lineaPr = (p: PrResumen) => `#${p.numero} ${p.titulo} (CI ${p.ci}, revisión ${p.revision}${p.borrador ? ', borrador' : ''}${p.erroresDeFormato ? `, ${p.erroresDeFormato} errores de formato` : ''})`;
 
 /** Prompt de sistema del asistente: quién es la persona, qué le toca y las reglas. Va una vez por conversación. */
-export function promptSistemaChat(perfil: Perfil, dia: MiDia, resumen: string, repo: string): string {
+export function promptSistemaChat(perfil: Perfil, dia: MiDia, resumen: string, repo: string, estilo: Estilo = 'breve'): string {
   return [
-    promptDeRol(dia.rol, perfil, 'breve'),
+    promptDeRol(dia.rol, perfil, estilo),
     `Hablas con ${dia.saludo}, rol ${dia.rol}, en ${repo}. Eres su asistente libre: puede preguntarte cualquier cosa del proyecto.`,
     'Si pregunta por sus tareas o qué hacer, responde con lo que está en "Sus datos" y cierra preguntando si quiere entenderla, hacerla o revisarla.',
     'Trabajas en modo de solo lectura: propones, no ejecutas cambios ni publicas nada. Si pide publicar, entrégale el texto listo para que lo publique desde la app.',

@@ -22,6 +22,8 @@ export interface PrResumen {
   estadoFusion: string;
   pidenMiRevision: boolean;
   erroresDeFormato?: number;
+  /** Último commit del PR: sirve para no revisar dos veces lo mismo. */
+  sha?: string;
 }
 
 export type TipoSugerencia = 'ci' | 'formato' | 'revision-recibida' | 'bloqueo' | 'vencida' | 'abrir-pr' | 'entrega' | 'revisar' | 'espera';

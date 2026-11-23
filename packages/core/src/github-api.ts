@@ -7,7 +7,7 @@ type Fetch = (url: string, init?: { method?: string; headers?: Record<string, st
 
 const BASE = 'https://api.github.com';
 
-const CONSULTA_PRS = `query($o:String!,$r:String!,$despues:String){repository(owner:$o,name:$r){pullRequests(states:OPEN,first:50,after:$despues,orderBy:{field:UPDATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor}nodes{number title url isDraft headRefName mergeStateStatus reviewDecision additions deletions author{login} reviewRequests(first:20){nodes{requestedReviewer{... on User{login}}}} comments(first:100){nodes{author{login}}} reviews(first:100){nodes{author{login}}} commits(last:1){nodes{commit{statusCheckRollup{contexts(first:60){nodes{__typename ... on CheckRun{name conclusion status} ... on StatusContext{context state}}}}}}}}}}}`;
+const CONSULTA_PRS = `query($o:String!,$r:String!,$despues:String){repository(owner:$o,name:$r){pullRequests(states:OPEN,first:50,after:$despues,orderBy:{field:UPDATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor}nodes{number title url isDraft headRefName headRefOid mergeStateStatus reviewDecision additions deletions author{login} reviewRequests(first:20){nodes{requestedReviewer{... on User{login}}}} comments(first:100){nodes{author{login}}} reviews(first:100){nodes{author{login}}} commits(last:1){nodes{commit{statusCheckRollup{contexts(first:60){nodes{__typename ... on CheckRun{name conclusion status} ... on StatusContext{context state}}}}}}}}}}}`;
 
 interface NodoPr {
   number: number;
@@ -15,6 +15,7 @@ interface NodoPr {
   url: string;
   isDraft: boolean;
   headRefName: string;
+  headRefOid?: string;
   mergeStateStatus: string;
   reviewDecision: string | null;
   additions: number;
@@ -122,6 +123,7 @@ export class GitHubApi {
         ci: estadoCi(checks as { name: string; conclusion?: string | null; status?: string }[]),
         revision: p.reviewDecision === 'APPROVED' ? 'aprobado' : p.reviewDecision === 'CHANGES_REQUESTED' ? 'cambios' : p.reviewDecision === 'REVIEW_REQUIRED' ? 'requerida' : 'ninguna',
         estadoFusion: p.mergeStateStatus,
+        ...(p.headRefOid ? { sha: p.headRefOid } : {}),
         pidenMiRevision: Boolean(yo && p.reviewRequests.nodes.some((n) => n.requestedReviewer?.login === yo)),
       } satisfies PrResumen;
     });

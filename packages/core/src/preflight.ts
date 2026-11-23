@@ -71,3 +71,15 @@ export function cambioDesdeGit(cwd: string, perfil: Perfil, opciones: { titulo?:
   const titulo = opciones.titulo ?? git(cwd, 'log', '-1', '--format=%s');
   return { rama, titulo, cuerpo: opciones.cuerpo ?? '', archivos };
 }
+
+/** El comentario único que el integrador deja en un PR: toda la lista de una vez y qué correr. */
+export function comentarioDeRevision(numero: number | string, i: Informe): string {
+  const todo = [...i.errores, ...i.avisos];
+  if (todo.length === 0) return `Revisión de Integración del #${numero}: el formato está completo.`;
+  return [
+    `Revisión de Integración del #${numero}. Corrige esto antes de la siguiente revisión:`,
+    '',
+    ...todo.map((h, k) => `${k + 1}. ${h.mensaje}${h.arreglo ? ` ${h.arreglo}` : ''}`),
+    ...(i.verificaciones.length ? ['', 'Corre y pega el resultado en Validaciones:', ...i.verificaciones.map((v) => `- ${v}`)] : []),
+  ].join('\n');
+}

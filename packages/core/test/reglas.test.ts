@@ -45,12 +45,15 @@ describe('preflight de PR (formato del repositorio)', () => {
     const plantilla = '## Tarea y alcance\n\n- Tarea ClickUp: <código> · CU-<id interno>\n- Módulo:\n- Resumen del cambio:\n';
     const e = informe({ ...bueno, cuerpo: plantilla }, perfil).errores;
     expect(e.some((h) => h.regla === 'cuerpo' && /plantilla/.test(h.mensaje))).toBe(true);
-    expect(e.some((h) => /Falta la sección "## Trazabilidad"/.test(h.mensaje))).toBe(true);
+    expect(informe({ ...bueno, cuerpo: plantilla }, perfil).avisos.some((h) => /Falta la sección "## Trazabilidad"/.test(h.mensaje))).toBe(true);
   });
 
-  it('exige que los campos de trazabilidad no estén vacíos', () => {
+  it('avisa (sin bloquear) cuando los campos de trazabilidad están vacíos', () => {
     const c = { ...bueno, cuerpo: bueno.cuerpo.replace('RF-BFA-GEN-03', '') };
-    expect(informe(c, perfil).errores.some((h) => /RF \/ RNF/.test(h.mensaje))).toBe(true);
+    const i = informe(c, perfil);
+    expect(i.avisos.some((h) => /RF \/ RNF/.test(h.mensaje))).toBe(true);
+    expect(i.errores.some((h) => /RF \/ RNF/.test(h.mensaje))).toBe(false);
+    expect(i.ok).toBe(true);
   });
 
   it('avisa sobre ≈400 líneas y bloquea sobre el máximo', () => {

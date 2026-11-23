@@ -39,7 +39,11 @@ const aviso = (regla: string, mensaje: string, arreglo?: string): Hallazgo => ({
   ...(arreglo ? { arreglo } : {}),
 });
 
-/** Réplica de lo que hace el check `reglas` del CI, más lo que hoy se revisa a mano. */
+/**
+ * Réplica de lo que hace el check `reglas` del CI, más lo que hoy se revisa a mano.
+ * Error = rompe una regla dura (CI, plantilla sin llenar, archivos prohibidos, tamaño máximo).
+ * Aviso = formato blando (secciones y campos de trazabilidad, tamaño acordado, testing-ok).
+ */
 export function validarRama(c: Cambio, p: Perfil): Hallazgo[] {
   const codigo = codigoDeTitulo(c.titulo) ?? codigoDeRama(c.rama, p);
   if (!codigo) {
@@ -97,13 +101,13 @@ export function validarCuerpo(c: Cambio, p: Perfil): Hallazgo[] {
     );
   }
   for (const s of p.cuerpo.secciones) {
-    if (!c.cuerpo.includes(s)) salida.push(error('cuerpo', `Falta la sección "${s}".`));
+    if (!c.cuerpo.includes(s)) salida.push(aviso('cuerpo', `Falta la sección "${s}".`, 'Usa la plantilla del repositorio.'));
   }
   for (const campo of p.cuerpo.campos) {
     const re = new RegExp(`${campo.etiqueta.replace(/[/()]/g, '\\$&')}[ \\t]*:[ \\t]*(.*)$`, 'm');
     const valor = re.exec(c.cuerpo)?.[1]?.trim() ?? '';
     if (campo.obligatorio && valor.length === 0) {
-      salida.push(error('cuerpo', `El campo "${campo.etiqueta}" está vacío.`, 'Si no aplica, escribe "no aplica" y el motivo.'));
+      salida.push(aviso('cuerpo', `El campo "${campo.etiqueta}" está vacío.`, 'Si no aplica, escribe "no aplica" y el motivo.'));
     }
   }
   if (!/- \[x\]/i.test(c.cuerpo)) {

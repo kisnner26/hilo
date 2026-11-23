@@ -16,3 +16,4 @@ export * from './entorno.js';
 export * from './github-api.js';
 export * from './ahorro.js';
 export * from './chat.js';
+export * from './ahorro-config.js';
