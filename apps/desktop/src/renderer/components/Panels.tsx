@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Conexiones } from './Conexiones';
 import { api, type Config, type EstadoSesion, type EventoAgente, type Funcion, type HiloVista, type Informe, type ModeloAsignado, type PerfilVista } from '../lib/api';
 import { mdAHtml } from '../lib/markdown';
 import type { NodoVista } from '../lib/galaxy';
@@ -61,8 +62,9 @@ export function NotasPanel({ nodo }: { nodo: NodoVista | null }) {
 
 // ---------- Revisar PR ----------
 
-export function RevisarPanel() {
-  const [numero, setNumero] = useState('');
+export function RevisarPanel({ inicial = '' }: { inicial?: string }) {
+  const [numero, setNumero] = useState(inicial);
+  const [aviso, setAviso] = useState('');
   const [informe, setInforme] = useState<Informe | null>(null);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -78,6 +80,21 @@ export function RevisarPanel() {
       setCargando(false);
     }
   };
+  useEffect(() => {
+    if (inicial) {
+      setNumero(inicial);
+      void (async () => {
+        setCargando(true);
+        try {
+          setInforme(await api.revisarPr(inicial));
+        } catch (e) {
+          setError(`No se pudo revisar: ${String(e)}`);
+        } finally {
+          setCargando(false);
+        }
+      })();
+    }
+  }, [inicial]);
   const todo = informe ? [...informe.errores.map((h) => ({ ...h, g: 'ERROR' })), ...informe.avisos.map((h) => ({ ...h, g: 'AVISO' }))] : [];
   const comentario = informe
     ? [`Revisión de Integración del #${numero}. Corrige esto antes de la siguiente revisión:`, '', ...todo.map((h, i) => `${i + 1}. ${h.mensaje}${h.arreglo ? ` ${h.arreglo}` : ''}`), ...(informe.verificaciones.length ? ['', 'Corre y pega el resultado en Validaciones:', ...informe.verificaciones.map((v) => `- ${v}`)] : [])].join('\n')
@@ -105,10 +122,26 @@ export function RevisarPanel() {
             ))}
           </ul>
           {!informe.ok && (
-            <button className="boton secundario" onClick={() => void api.copiar(comentario)}>
-              Copiar como un solo comentario
-            </button>
+            <div className="fila">
+              <button className="boton secundario" onClick={() => void api.copiar(comentario)}>
+                Copiar como un solo comentario
+              </button>
+              <button
+                className="boton"
+                onClick={async () => {
+                  try {
+                    const r = await api.publicarGithub(numero.replace('#', ''), comentario);
+                    setAviso(r.publicado ? `Publicado: ${r.enlace ?? ''}` : 'No se publicó.');
+                  } catch (e) {
+                    setAviso(String(e instanceof Error ? e.message : e));
+                  }
+                }}
+              >
+                Publicar en el PR
+              </button>
+            </div>
           )}
+          {aviso && <p className="suave">{aviso}</p>}
         </>
       )}
     </div>
@@ -288,6 +321,9 @@ export function AjustesPanel({ perfil, alCambiar }: { perfil: PerfilVista | null
   return (
     <div className="columna">
       <h2>Ajustes</h2>
+
+      <h3>Conexiones</h3>
+      <Conexiones alCambiar={alCambiar} />
 
       <h3>Suscripciones</h3>
       <p className="suave">Hilo no usa claves de API. Inicia sesión con tu suscripción en la herramienta oficial; Hilo solo la lanza.</p>
