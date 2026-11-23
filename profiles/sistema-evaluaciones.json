@@ -1,0 +1,65 @@
+{
+  "id": "sistema-evaluaciones",
+  "name": "Sistema de evaluaciones (UAM)",
+  "idioma": "es",
+  "repo": { "owner": "Nell16", "name": "sistema-evaluaciones", "base": "main" },
+  "clickup": {
+    "workspaceId": "90141806675",
+    "listas": {
+      "sprint02Bfa": "1800450000001291",
+      "sprint02Weill": "901422673349",
+      "bugs": "901422672550"
+    }
+  },
+  "codigoTarea": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+$",
+  "rama": {
+    "tipos": ["feature", "fix", "docs", "test", "chore"],
+    "patron": "^(feature|fix|docs|test|chore)/[a-z0-9-]+-{codigo}$",
+    "ejemplo": "feature/ana-GEN-01-BE"
+  },
+  "titulo": { "patron": "^\\[{codigo}\\] .+", "ejemplo": "[GEN-01-BE] Consultar catálogo y detalle de tests" },
+  "limites": { "lineasPorPr": 400, "lineasMaximas": 700 },
+  "cuerpo": {
+    "primeraLinea": "^Tarea ClickUp: {codigo} · CU-[a-z0-9]{6,}(\\[[a-z ]+\\])?$",
+    "secciones": ["## Tarea y alcance", "## Trazabilidad", "## Validaciones"],
+    "campos": [
+      { "etiqueta": "Módulo", "obligatorio": true },
+      { "etiqueta": "Resumen del cambio", "obligatorio": true },
+      { "etiqueta": "RF / RNF", "obligatorio": true },
+      { "etiqueta": "Caso(s) de uso", "obligatorio": true },
+      { "etiqueta": "Contrato API / migración impactada", "obligatorio": true }
+    ],
+    "marcadoresDePlantilla": ["<código>", "<id interno>", "CU-<id"]
+  },
+  "archivos": {
+    "prohibidos": ["(^|/)\\.env$"],
+    "mdNuevoSoloEn": ["^docs/", "(^|/)README\\.md$"],
+    "migraciones": {
+      "carpeta": "database/migrations",
+      "nombre": "^V[0-9]{12}__[a-z0-9]+_[a-z0-9_]+\\.sql$"
+    },
+    "ajenosAlModulo": ["(^|/)mvnw(\\.cmd)?$", "(^|/)\\.mvn/", "^docs/evidencias/"]
+  },
+  "testing": { "exigidoPara": "^(GEN|BFA)-", "exentos": "-(TEST|INT)(-|$)", "etiqueta": "testing-ok" },
+  "verificaciones": {
+    "backend": ["mvn -f backend/pom.xml spotless:check"],
+    "frontend": ["npm run typecheck", "npm test", "npm run lint", "npm run format:check", "npm run build"]
+  },
+  "evidencia": {
+    "campos": ["enlace al PR o documento", "contribución de cada participante", "SHA probado", "pendientes concretos"]
+  },
+  "roles": {
+    "documentador": { "puede": ["leer", "comentar", "docs"], "noPuede": ["fusionar", "aprobar", "codigo"] },
+    "desarrollador": { "puede": ["leer", "comentar", "codigo", "abrir-pr"], "noPuede": ["fusionar", "aprobar", "etiquetar-testing"] },
+    "tester": { "puede": ["leer", "comentar", "etiquetar-testing", "pruebas"], "noPuede": ["fusionar", "aprobar"] },
+    "integrador": { "puede": ["leer", "comentar", "aprobar", "fusionar", "abrir-pr", "codigo"], "noPuede": [] }
+  },
+  "integradores": ["kisnner26", "over2099"],
+  "modelos": {
+    "orquestador": { "cli": "claude", "modelo": "claude-opus-5-5", "esfuerzo": "medium" },
+    "desarrollo": { "cli": "claude", "modelo": "claude-sonnet-5-5", "esfuerzo": "low" },
+    "documentacion": { "cli": "claude", "modelo": "claude-haiku-5-5", "esfuerzo": "low" },
+    "integracion": { "cli": "claude", "modelo": "claude-sonnet-5-5", "esfuerzo": "low" },
+    "testing": { "cli": "claude", "modelo": "claude-sonnet-5-5", "esfuerzo": "low" }
+  }
+}
