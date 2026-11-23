@@ -229,6 +229,7 @@ export class Galaxia {
       }
     }
     this.sim.push(nucleo);
+    this.principales = [];
     this.centrosCom = comunidades.map((c) => ({ x: 0, y: 0, z: 0, n: 0, nombre: nombreDe.get(c) ?? '' }));
 
     const n = this.sim.length;
@@ -321,7 +322,7 @@ export class Galaxia {
       .stop();
     this.simulacion = sim;
     this.ticks = 0;
-    this.radio = 330 + comunidades.length * 8;
+    this.radio = 430;
     this.reiniciarVista();
   }
 
@@ -605,18 +606,11 @@ export class Galaxia {
     }
   }
 
+  /** Las comunidades más grandes llevan etiqueta; con cientos de comunidades, más sería ruido. */
+  private principales: number[] = [];
+
   private ubicarEtiquetas(): void {
     if (this.sim.length === 0) return;
-    if (this.etiquetas.childElementCount !== this.centrosCom.length) {
-      this.etiquetas.replaceChildren(
-        ...this.centrosCom.map((c) => {
-          const el = document.createElement('span');
-          el.className = 'etiqueta-carpeta';
-          el.textContent = c.nombre;
-          return el;
-        }),
-      );
-    }
     for (const c of this.centrosCom) c.x = c.y = c.z = c.n = 0;
     this.sim.forEach((s) => {
       if (s.c < 0) return;
@@ -626,10 +620,25 @@ export class Galaxia {
       c.z += s.z;
       c.n++;
     });
+    if (this.principales.length === 0) {
+      this.principales = this.centrosCom.map((c, i) => ({ i, n: c.n })).sort((x, y) => y.n - x.n).slice(0, 14).map((x) => x.i);
+    }
+    if (this.etiquetas.childElementCount !== this.principales.length) {
+      this.etiquetas.replaceChildren(
+        ...this.principales.map((i) => {
+          const el = document.createElement('span');
+          el.className = 'etiqueta-carpeta';
+          const nombre = this.centrosCom[i]!.nombre;
+          el.textContent = nombre.length > 26 ? `${nombre.slice(0, 25)}…` : nombre;
+          return el;
+        }),
+      );
+    }
     const r = this.dom.getBoundingClientRect();
     const v = new THREE.Vector3();
-    this.centrosCom.forEach((c, i) => {
-      const el = this.etiquetas.children[i] as HTMLElement | undefined;
+    this.principales.forEach((ci, k) => {
+      const c = this.centrosCom[ci]!;
+      const el = this.etiquetas.children[k] as HTMLElement | undefined;
       if (!el) return;
       if (c.n === 0) return void (el.style.display = 'none');
       v.set(c.x / c.n, c.y / c.n, c.z / c.n).project(this.camara);
