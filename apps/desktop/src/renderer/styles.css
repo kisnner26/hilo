@@ -546,3 +546,13 @@ html:not(.cristal) body, body { background: radial-gradient(1000px 640px at 14% 
 .fondo-liquido span:nth-child(1) { background: #ffffff; opacity: 0.1; }
 .fondo-liquido span:nth-child(2) { background: #b8b8c4; opacity: 0.09; }
 .fondo-liquido span:nth-child(3) { background: #ffffff; opacity: 0.05; }
+
+/* Mi día: las listas nunca desbordan su columna */
+.columna { overflow-x: hidden; }
+.dos-listas { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+.dos-listas > section { min-width: 0; }
+.lista-compacta li { min-width: 0; }
+.lista-compacta li > .dist, .lista-compacta li > .distintivos, .lista-compacta li > .enlace, .lista-compacta .codigo { flex-shrink: 0; }
+.lista-compacta .distintivos { display: inline-flex; gap: 6px; }
+.accion-cabeza { min-width: 0; }
+.accion .texto-accion { min-width: 0; overflow-wrap: anywhere; }
