@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { UsoReal } from './Uso';
 import { api, type AhorroVista, type Conexion, type Config, type EstadoSesion, type Funcion, type InstalacionesVista, type ModeloAsignado, type PerfilVista, type ProgramadaVista, type Prueba } from '../lib/api';
+import { Actualizaciones } from './Actualizaciones';
 import { Conexiones } from './Conexiones';
 
-export type PestanaAjustes = 'cuentas' | 'modelos' | 'ahorro' | 'automatico' | 'diagnostico';
+export type PestanaAjustes = 'cuentas' | 'modelos' | 'ahorro' | 'automatico' | 'actualizar' | 'diagnostico';
 
 const PESTANAS: { id: PestanaAjustes; nombre: string }[] = [
   { id: 'cuentas', nombre: 'Cuentas' },
   { id: 'modelos', nombre: 'Modelos' },
   { id: 'ahorro', nombre: 'Ahorro' },
   { id: 'automatico', nombre: 'Automático' },
+  { id: 'actualizar', nombre: 'Actualizaciones' },
   { id: 'diagnostico', nombre: 'Diagnóstico' },
 ];
 
@@ -454,6 +456,7 @@ export function Ajustes({ perfil, alCambiar, verRecorrido, inicial = 'cuentas' }
       {tab === 'modelos' && <TabModelos perfil={perfil} alCambiar={alCambiar} />}
       {tab === 'ahorro' && <TabAhorro />}
       {tab === 'automatico' && <TabAutomatico />}
+      {tab === 'actualizar' && <Actualizaciones />}
       {tab === 'diagnostico' && <TabDiagnostico />}
     </div>
   );

@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
 import { registrarAutopiloto, registrarUso } from './autopiloto';
+import { registrarActualizador } from './actualizador';
 import { registrarDictado } from './dictado';
 
 type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola' | 'autopiloto';
@@ -49,6 +50,8 @@ interface Config {
   /** Listas de ClickUp que se siguen. Si no hay, se usan las del perfil. */
   listasClickup?: string[];
   avisos?: boolean;
+  /** Revisar si hay una versión nueva cada pocas horas (solo avisa, no instala). Por defecto sí. */
+  actualizacionesAuto?: boolean;
   /** Repositorio donde se publican los releases de Hilo, para contar descargas. */
   repoHilo?: string;
 }
@@ -901,6 +904,12 @@ void app.whenReady().then(() => {
   registrarIpcExtra();
   registrarIpcConexiones();
   registrarDictado(enviar);
+  registrarActualizador({
+    enviar,
+    avisar,
+    auto: () => leerConfig().actualizacionesAuto !== false,
+    fijarAuto: (v) => void guardarConfig({ ...leerConfig(), actualizacionesAuto: v }),
+  });
   const auto = registrarAutopiloto({
     config: () => leerConfig(),
     perfil: perfilActual,

@@ -58,6 +58,11 @@ const CANALES = [
   'dictado:permisos',
   'dictado:audio',
   'dictado:descargar-modelo',
+  'actualizar:version',
+  'actualizar:comprobar',
+  'actualizar:instalar',
+  'actualizar:auto',
+  'actualizar:pagina',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
@@ -90,6 +95,11 @@ contextBridge.exposeInMainWorld('hilo', {
     const f = (_: unknown, e: unknown) => cb(e);
     ipcRenderer.on('dictado:descarga', f);
     return () => ipcRenderer.off('dictado:descarga', f);
+  },
+  alActualizar: (cb: (e: unknown) => void) => {
+    const f = (_: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('actualizar:evento', f);
+    return () => ipcRenderer.off('actualizar:evento', f);
   },
   alCodigo: (cb: (e: unknown) => void) => {
     const f = (_: unknown, e: unknown) => cb(e);

@@ -305,9 +305,33 @@ function dictadoDemo() {
   guionDemo.push(setTimeout(() => { emitirDemo({ tipo: 'final', texto: frases[3]! }); emitirDemo({ tipo: 'cerrado' }); }, 700 + frases.length * 650 + 1500));
 }
 
+export interface ActualizacionVista {
+  hay: boolean;
+  actual: string;
+  ultima: string;
+  notas: string;
+  pagina: string;
+  publicada: string;
+  asset?: { nombre: string; tam: number };
+}
+export interface VersionVista {
+  version: string;
+  empaquetada: boolean;
+  plataforma: string;
+  auto: boolean;
+  ultima?: ActualizacionVista;
+}
+export interface EventoActualizar {
+  tipo: 'descargando' | 'instalando' | 'reiniciando' | 'error' | 'disponible';
+  bajados?: number;
+  total?: number;
+  texto?: string;
+  ultima?: string;
+}
+
 declare global {
   interface Window {
-    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void; alDictado: (cb: (e: unknown) => void) => () => void; alDescarga: (cb: (e: unknown) => void) => () => void };
+    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void; alDictado: (cb: (e: unknown) => void) => () => void; alDescarga: (cb: (e: unknown) => void) => () => void; alActualizar: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -422,6 +446,15 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
+  versionApp: (): Promise<VersionVista> => (enElectron ? inv('actualizar:version') : Promise.resolve({ version: '0.1.3', empaquetada: true, plataforma: 'darwin', auto: true })),
+  comprobarActualizacion: (): Promise<ActualizacionVista> =>
+    enElectron
+      ? inv('actualizar:comprobar')
+      : new Promise((r) => setTimeout(() => r({ hay: true, actual: '0.1.3', ultima: '0.2.0', notas: 'Piloto automático, quién te frena, dictado con Whisper en español e inglés, grafo con impacto y actualizaciones desde la app.', pagina: 'https://github.com/kisnner26/hilo/releases', publicada: new Date().toISOString(), asset: { nombre: 'Hilo-0.2.0-arm64-mac.zip', tam: 118_000_000 } }), 900)),
+  instalarActualizacion: (): Promise<void> => (enElectron ? inv('actualizar:instalar') : Promise.resolve()),
+  actualizacionesAuto: (v: boolean): Promise<void> => (enElectron ? inv('actualizar:auto', v) : Promise.resolve()),
+  paginaActualizacion: (): Promise<void> => (enElectron ? inv('actualizar:pagina') : Promise.resolve()),
+  alActualizar: (cb: (e: EventoActualizar) => void): (() => void) => (enElectron ? window.hilo!.alActualizar((e) => cb(e as EventoActualizar)) : () => {}),
   dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ motor: 'apple', disponible: true, plataforma: 'darwin', escuchando: false, whisper: { herramienta: true, modelo: false, archivoModelo: 'ggml-small-q5_1.bin' } })),
   dictadoIniciar: (idioma: IdiomaVoz): Promise<void> => {
     if (enElectron) return inv('dictado:iniciar', idioma);

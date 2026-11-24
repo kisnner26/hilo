@@ -37,10 +37,13 @@ interface Props {
   abrirPaleta: () => void;
   abrirAhorro: () => void;
   abrirAyuda: () => void;
+  /** Versión nueva disponible, si la hay. */
+  nuevaVersion?: string;
+  abrirActualizar: () => void;
 }
 
 /** Barra superior: deja libre el sitio de los tres botones de la ventana y reúne lo que se usa en todas las vistas. */
-export function BarraTitulo({ mac, seccion, pos, modo, cambiar, alternar, abrirPaleta, abrirAhorro, abrirAyuda }: Props) {
+export function BarraTitulo({ mac, seccion, pos, modo, cambiar, alternar, abrirPaleta, abrirAhorro, abrirAyuda, nuevaVersion, abrirActualizar }: Props) {
   const [menu, setMenu] = useState(false);
   const [uso, setUso] = useState<UsoVista | null>(null);
   const caja = useRef<HTMLDivElement>(null);
@@ -78,6 +81,11 @@ export function BarraTitulo({ mac, seccion, pos, modo, cambiar, alternar, abrirP
       </button>
       <span className="bar-seccion">{seccion}</span>
       <span className="espacio" />
+      {nuevaVersion && (
+        <button className="bar-actualizar" onClick={abrirActualizar} title="Hay una versión nueva de Hilo. Se actualiza desde aquí, sin ir a GitHub.">
+          Actualizar a {nuevaVersion}
+        </button>
+      )}
       <button className="bar-ahorro" onClick={abrirAhorro} title="Tokens que Hilo evitó mandar en los últimos 30 días. Toca para ver el detalle.">
         <i aria-hidden="true" />
         {evitados > 0 ? (

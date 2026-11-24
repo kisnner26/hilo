@@ -45,6 +45,7 @@ const GLOSARIO: [string, string][] = [
 const PREGUNTAS: [string, string][] = [
   ['No veo mis tareas', 'Conecta ClickUp y revisa que sigues la lista de tu sprint, en Ajustes › Cuentas.'],
   ['¿Qué gasta tokens?', 'Solo las preguntas libres y los pasos con agente. Lo demás (tus tareas, quién te frena, entregas y avisos) se resuelve sin modelo. Mira el detalle en Ajustes › Ahorro.'],
+  ['¿Cómo actualizo Hilo?', 'En Ajustes › Actualizaciones toca «Comprobar actualizaciones» y luego «Actualizar ahora». Hilo se cierra, se reemplaza por la versión nueva y se vuelve a abrir solo.'],
   ['¿Es seguro?', 'Tus tokens se guardan cifrados con el llavero del sistema. Nada se publica sin que lo confirmes, y los agentes que editan trabajan en una copia aparte, sin poder hacer push ni borrar.'],
   ['¿Dónde está Revisar PR?', 'Solo aparece para integradores.'],
   ['¿Para qué sirve el grafo?', 'Elige un punto y verás qué usa, qué lo usa y qué se rompe si lo cambias. Desde ahí puedes preguntarle al agente con el contexto justo.'],

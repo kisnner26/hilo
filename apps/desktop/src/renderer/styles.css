@@ -778,3 +778,11 @@ html:not(.cristal) body, body { background: radial-gradient(1000px 640px at 14% 
 .pasos-voz { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .pasos-voz li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .pasos-voz li.hecho span { text-decoration: line-through; color: var(--suave); }
+
+/* ---------- Actualizaciones ---------- */
+.nueva-version { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--linea); }
+.fila-version { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.fila-version > div { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.notas-version { max-height: 220px; overflow: auto; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); font-size: 12.5px; }
+.bar-actualizar { height: 34px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.16); color: #fff; font-size: 12px; font-weight: 650; white-space: nowrap; -webkit-app-region: no-drag; }
+.bar-actualizar:hover { background: rgba(167, 139, 250, 0.3); }

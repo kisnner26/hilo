@@ -83,11 +83,16 @@ export function App() {
   const [paleta, setPaleta] = useState(false);
   const [fijados, setFijados] = useState<string[]>([]);
   const [senalEnfocar, setSenalEnfocar] = useState(0);
+  const [nuevaVersion, setNuevaVersion] = useState('');
   const disp = useDisposicion();
   const mac = (typeof window !== 'undefined' && window.hilo?.plataforma === 'darwin') || (!enElectron && /[?&]mac\b/.test(location.search));
 
   useEffect(() => alPreguntarAlAgente(() => setVista('asistente')), []);
   useEffect(() => alIrASeccion((id) => setVista(id as Vista)), []);
+  useEffect(() => {
+    void api.versionApp().then((x) => x.ultima?.hay && setNuevaVersion(x.ultima.ultima));
+    return api.alActualizar((e) => e.tipo === 'disponible' && e.ultima && setNuevaVersion(e.ultima));
+  }, []);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -179,6 +184,11 @@ export function App() {
           setVista('ajustes');
         }}
         abrirAyuda={() => setAyuda(true)}
+        nuevaVersion={nuevaVersion}
+        abrirActualizar={() => {
+          setPestanaAjustes('actualizar');
+          setVista('ajustes');
+        }}
       />
       <div className="cuerpo">
       <nav className={`riel vidrio${disp.modo === 'iconos' ? ' solo-iconos' : ''}`} aria-label="Navegación">
