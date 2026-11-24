@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   argumentosClaude,
   argumentosCodex,
+  promptSistemaChat,
   asignar,
   cargarPerfil,
   comentarioClickup,
@@ -277,5 +278,38 @@ describe('modo ligero del agente', () => {
     const c = argumentosCodex({ asignado: { cli: 'codex', modelo: '', esfuerzo: 'low' }, prompt: 'x', cwd: '.', imagenes: ['/a.png', '/b.png'] });
     expect(c).toEqual(expect.arrayContaining(['-i', '/a.png', '/b.png']));
     expect(c[c.length - 1]).toBe('-');
+  });
+});
+
+describe('niveles de permisos del agente', () => {
+  const base = { asignado: { cli: 'claude' as const, modelo: 'claude-sonnet-5-5', esfuerzo: 'low' as const }, prompt: 'x', cwd: '.' };
+  it('lectura: solo lee y planea', () => {
+    const a = argumentosClaude({ ...base, permisos: 'lectura', soloLectura: true });
+    expect(a).toContain('plan');
+    expect(a).not.toContain('--dangerously-skip-permissions');
+  });
+  it('trabajo: lee GitHub sin publicar, edita y prueba; publicar y borrar siguen prohibidos', () => {
+    const a = argumentosClaude({ ...base, permisos: 'trabajo' });
+    expect(a).toEqual(expect.arrayContaining(['acceptEdits', 'Bash(gh pr view:*)', 'Bash(gh pr diff:*)', '--disallowedTools', 'Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh api:*)']));
+    const permitidas = a.slice(a.indexOf('--allowedTools'), a.indexOf('--disallowedTools'));
+    expect(permitidas).not.toContain('Bash(git push:*)');
+    expect(permitidas).not.toContain('Bash(gh pr merge:*)');
+    expect(a).not.toContain('--dangerously-skip-permissions');
+  });
+  it('total: permisos abiertos, sin lista de prohibidos y con todas las herramientas', () => {
+    const a = argumentosClaude({ ...base, permisos: 'total', ligero: true });
+    expect(a).toContain('--dangerously-skip-permissions');
+    expect(a).not.toContain('--disallowedTools');
+    expect(a).not.toContain('--tools');
+    expect(a).toContain('--strict-mcp-config');
+  });
+  it('en Codex: total abre la caja, trabajo escribe en el proyecto, lectura solo lee', () => {
+    const c = (permisos: 'lectura' | 'trabajo' | 'total') => argumentosCodex({ asignado: { cli: 'codex', modelo: '', esfuerzo: 'low' }, prompt: 'x', cwd: '.', permisos, ...(permisos === 'lectura' ? { soloLectura: true } : {}) });
+    expect(c('total')).toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(c('trabajo')).toEqual(expect.arrayContaining(['--sandbox', 'workspace-write']));
+    expect(c('lectura')).toEqual(expect.arrayContaining(['--sandbox', 'read-only']));
+  });
+  it('el prompt del asistente refleja el nivel', () => {
+    expect(promptSistemaChat(cargarPerfil(join(import.meta.dirname, '../../../profiles/sistema-evaluaciones.json')), { saludo: 'a', rol: 'desarrollador', tareas: [], prs: [], paraRevisar: [], acciones: [] } as never, '', 'o/r', 'breve', 'total')).toContain('permisos completos');
   });
 });

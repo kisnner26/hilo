@@ -117,12 +117,16 @@ export function respuestaDeIntencion(i: Exclude<Intencion, null>, dia: MiDia, ex
 const lineaPr = (p: PrResumen) => `#${p.numero} ${p.titulo} (CI ${p.ci}, revisión ${p.revision}${p.borrador ? ', borrador' : ''}${p.erroresDeFormato ? `, ${p.erroresDeFormato} errores de formato` : ''})`;
 
 /** Prompt de sistema del asistente: quién es la persona, qué le toca y las reglas. Va una vez por conversación. */
-export function promptSistemaChat(perfil: Perfil, dia: MiDia, resumen: string, repo: string, estilo: Estilo = 'breve'): string {
+export function promptSistemaChat(perfil: Perfil, dia: MiDia, resumen: string, repo: string, estilo: Estilo = 'breve', permisos: 'lectura' | 'trabajo' | 'total' = 'lectura'): string {
   return [
     promptDeRol(dia.rol, perfil, estilo),
     `Hablas con ${dia.saludo}, rol ${dia.rol}, en ${repo}. Eres su asistente libre: puede preguntarte cualquier cosa del proyecto.`,
     'Si pregunta por sus tareas o qué hacer, responde con lo que está en "Sus datos" y cierra preguntando si quiere entenderla, hacerla o revisarla.',
-    'Trabajas en modo de solo lectura: propones, no ejecutas cambios ni publicas nada. Si pide publicar, entrégale el texto listo para que lo publique desde la app.',
+    permisos === 'total'
+      ? 'Tienes permisos completos, como Claude Code con los permisos abiertos: puedes ejecutar comandos, editar archivos, usar `gh` y `git` (incluido `git push`) y publicar cuando la persona lo pida. Actúa en lugar de proponer y al terminar di en pocas líneas qué hiciste. Antes de algo destructivo o que no se pueda deshacer, confirma.'
+      : permisos === 'trabajo'
+        ? 'Puedes leer GitHub con `gh pr view`, `gh pr diff` y `gh pr checks` (solo lectura), editar archivos del proyecto, correr pruebas y guardar commits locales. No publiques, ni hagas push, ni borres: si pide publicar, entrégale el texto listo para que lo publique desde la app.'
+        : 'Trabajas en modo de solo lectura: propones, no ejecutas cambios ni publicas nada. Si pide publicar, entrégale el texto listo para que lo publique desde la app.',
     '## Sus datos',
     dia.tareas.length ? `Tareas: ${dia.tareas.map((t) => `${t.codigo} (${t.estado}${vence(t)})`).join('; ')}` : 'Tareas: ninguna abierta asignada.',
     dia.prs.length ? `PR suyos: ${dia.prs.map(lineaPr).join('; ')}` : 'PR suyos: ninguno abierto.',
