@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buscar, conexiones, dependencias, describir, impacto, puntosClave, rutaMasCorta, type GrafoG } from '../src/analisis-grafo.js';
+import { buscarNodos, conexiones, dependencias, describir, impacto, puntosClave, rutaMasCorta, type GrafoG } from '../src/analisis-grafo.js';
 
 const n = (id: string, extra: Partial<GrafoG['nodos'][number]> = {}) => ({ id, label: id, archivo: `src/${id}.ts`, comunidad: 1, nombreComunidad: 'servicios', ...extra });
 const g: GrafoG = {
@@ -46,10 +46,10 @@ describe('análisis del grafo', () => {
   });
 
   it('busca sin tildes ni mayúsculas y pone primero lo que empieza igual', () => {
-    expect(buscar(g, 'serv')[0]!.id).toBe('Servicio');
-    expect(buscar(g, 'REPO').map((x) => x.id)).toEqual(['Repositorio']);
-    expect(buscar(g, 'x')).toEqual([]);
-    expect(buscar(g, 'java')).toEqual([]);
+    expect(buscarNodos(g, 'serv')[0]!.id).toBe('Servicio');
+    expect(buscarNodos(g, 'REPO').map((x) => x.id)).toEqual(['Repositorio']);
+    expect(buscarNodos(g, 'x')).toEqual([]);
+    expect(buscarNodos(g, 'java')).toEqual([]);
   });
 
   it('los puntos clave son los más usados', () => {

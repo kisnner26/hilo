@@ -143,7 +143,7 @@ export function rutaMasCorta(g: GrafoG, desde: string, hasta: string): PasoRuta[
 const sinTildes = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /** Búsqueda por nombre o ruta: lo que empieza igual y lo más conectado salen primero. */
-export function buscar(g: GrafoG, texto: string, k = 8): NodoG[] {
+export function buscarNodos(g: GrafoG, texto: string, k = 8): NodoG[] {
   const q = sinTildes(texto.trim());
   if (q.length < 2) return [];
   const i = indice(g);
