@@ -1,6 +1,11 @@
-## hilo v0.2.0
+## hilo v0.3.0
 
 app de escritorio para que el equipo entregue completo a la primera. conecta tu github y tu clickup, te dice qué te toca hoy y, con tu claude code o codex, te ayuda a hacer el trabajo repetitivo. sin claves de api: usa tu suscripción.
+
+### qué cambia frente a v0.2.0
+- **funciona sin suscripción**: hilo detecta solo qué ia hay y usa la mejor. primero claude code o codex; si no hay, un modelo en tu propio equipo (apple intelligence en mac con chip m, sin descargar nada, u ollama); y si tampoco, búsqueda en tus notas y en el grafo. se ve y se cambia en ajustes › modelos
+- el piloto automático usa lo que haya: un modelo local puede redactar; editar código y arreglar el ci siguen pidiendo claude code o codex
+- los paneles del grafo ya no cortan nombres ni rutas largas
 
 ### qué trae
 - **mi día**: tus tareas de clickup y tus pr de github por urgencia, con el comentario de entrega ya preparado
@@ -18,19 +23,19 @@ descarga el archivo de tu sistema:
 
 | sistema | archivo |
 |---|---|
-| macos (apple silicon: m1 o más nuevo) | `Hilo-0.2.0-arm64.dmg` |
-| windows | `Hilo.Setup.0.2.0.exe` |
-| linux | `Hilo-0.2.0.AppImage` |
+| macos (apple silicon: m1 o más nuevo) | `Hilo-0.3.0-arm64.dmg` |
+| windows | `Hilo.Setup.0.3.0.exe` |
+| linux | `Hilo-0.3.0.AppImage` |
 
 la app no está firmada, así que:
 - macos: abre el dmg, arrastra Hilo a aplicaciones, clic derecho y abrir la primera vez
 - windows: si aparece smartscreen, más información y ejecutar de todos modos
-- linux: `chmod +x Hilo-0.2.0.AppImage` y ábrelo
+- linux: `chmod +x Hilo-0.3.0.AppImage` y ábrelo
 
 al abrirla: conecta github (se abre el navegador) y pega tu token de api de clickup. necesitas `gh` instalado para conectar github.
 
 ### dictado con whisper (opcional, la mejor voz)
 en macos: `brew install whisper-cpp` y, desde el chat, «descargar el modelo» (181 mb, una sola vez). sin eso usa el reconocimiento de apple, con un idioma a la vez.
 
-### si vienes de una versión anterior
-instala esta a mano una vez; de ahí en adelante se actualiza desde la app.
+### si ya tienes la 0.2.0
+actualiza desde la app: ajustes › actualizaciones › actualizar ahora. si tienes una versión anterior, instala esta a mano una vez.
