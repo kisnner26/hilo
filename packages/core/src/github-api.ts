@@ -7,13 +7,15 @@ type Fetch = (url: string, init?: { method?: string; headers?: Record<string, st
 
 const BASE = 'https://api.github.com';
 
-const CONSULTA_PRS = `query($o:String!,$r:String!,$despues:String){repository(owner:$o,name:$r){pullRequests(states:OPEN,first:50,after:$despues,orderBy:{field:UPDATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor}nodes{number title url isDraft headRefName headRefOid mergeStateStatus reviewDecision additions deletions author{login} reviewRequests(first:20){nodes{requestedReviewer{... on User{login}}}} comments(first:100){nodes{author{login}}} reviews(first:100){nodes{author{login}}} commits(last:1){nodes{commit{statusCheckRollup{contexts(first:60){nodes{__typename ... on CheckRun{name conclusion status} ... on StatusContext{context state}}}}}}}}}}}`;
+const CONSULTA_PRS = `query($o:String!,$r:String!,$despues:String){repository(owner:$o,name:$r){pullRequests(states:OPEN,first:50,after:$despues,orderBy:{field:UPDATED_AT,direction:DESC}){pageInfo{hasNextPage endCursor}nodes{number title url isDraft updatedAt headRefName headRefOid mergeStateStatus reviewDecision additions deletions author{login} latestOpinionatedReviews(first:20){nodes{state author{login}}} reviewRequests(first:20){nodes{requestedReviewer{... on User{login}}}} comments(first:100){nodes{author{login}}} reviews(first:100){nodes{author{login}}} commits(last:1){nodes{commit{statusCheckRollup{contexts(first:60){nodes{__typename ... on CheckRun{name conclusion status} ... on StatusContext{context state}}}}}}}}}}}`;
 
 interface NodoPr {
   number: number;
   title: string;
   url: string;
   isDraft: boolean;
+  updatedAt?: string;
+  latestOpinionatedReviews?: { nodes: { state: string; author: { login: string } | null }[] };
   headRefName: string;
   headRefOid?: string;
   mergeStateStatus: string;
@@ -125,6 +127,13 @@ export class GitHubApi {
         estadoFusion: p.mergeStateStatus,
         ...(p.headRefOid ? { sha: p.headRefOid } : {}),
         pidenMiRevision: Boolean(yo && p.reviewRequests.nodes.some((n) => n.requestedReviewer?.login === yo)),
+        revisoresPedidos: p.reviewRequests.nodes.map((n) => n.requestedReviewer?.login).filter((x): x is string => Boolean(x)),
+        cambiosPedidosPor: (p.latestOpinionatedReviews?.nodes ?? []).filter((r) => r.state === 'CHANGES_REQUESTED' && r.author).map((r) => r.author!.login),
+        aprobadoPor: (p.latestOpinionatedReviews?.nodes ?? []).filter((r) => r.state === 'APPROVED' && r.author).map((r) => r.author!.login),
+        atrasado: p.mergeStateStatus === 'BEHIND',
+        checksFaltantes: (checks as { name: string; conclusion?: string | null }[]).filter((c) => /^(testing-ok|ci-ok)$/.test(c.name) && c.conclusion !== 'SUCCESS').map((c) => c.name),
+        ...(p.updatedAt ? { actualizado: p.updatedAt } : {}),
+        lineas: p.additions + p.deletions,
       } satisfies PrResumen;
     });
   }
@@ -163,6 +172,54 @@ export class GitHubApi {
   async comentar(repo: string, numero: number | string, texto: string): Promise<string> {
     const r = await this.pedir<{ html_url: string }>(`/repos/${repo}/issues/${numero}/comments`, { method: 'POST', body: { body: texto } });
     return r.html_url;
+  }
+
+  /** Texto crudo de una URL de GitHub (los registros de Actions redirigen a un archivo de texto). */
+  private async texto(ruta: string): Promise<string> {
+    const r = await this.fetchFn(`${this.base}${ruta}`, { headers: { Authorization: `Bearer ${this.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'hilo' } });
+    if (!r.ok) throw new ErrorGithub(r.status, `GitHub respondió ${r.status} al pedir el registro.`);
+    return r.text();
+  }
+
+  /** Registro de los pasos que fallaron en el último commit, sin los que pasaron: es lo único que el agente necesita ver. */
+  async registrosFallidos(repo: string, sha: string, maxTrabajos = 3): Promise<{ trabajo: string; paso: string; registro: string }[]> {
+    const corridas = await this.pedir<{ workflow_runs: { id: number; conclusion: string | null }[] }>(`/repos/${repo}/actions/runs?head_sha=${sha}&per_page=10`);
+    const salida: { trabajo: string; paso: string; registro: string }[] = [];
+    for (const c of corridas.workflow_runs.filter((x) => x.conclusion === 'failure')) {
+      const t = await this.pedir<{ jobs: { id: number; name: string; conclusion: string | null; steps: { name: string; conclusion: string | null }[] }[] }>(`/repos/${repo}/actions/runs/${c.id}/jobs?per_page=50`);
+      for (const j of t.jobs.filter((x) => x.conclusion === 'failure')) {
+        if (salida.length >= maxTrabajos) return salida;
+        const paso = j.steps.find((x) => x.conclusion === 'failure')?.name ?? 'desconocido';
+        salida.push({ trabajo: j.name, paso, registro: await this.texto(`/repos/${repo}/actions/jobs/${j.id}/logs`).catch(() => '') });
+      }
+    }
+    return salida;
+  }
+
+  /** Comentarios en línea (archivo y línea) y revisiones de un PR, en forma compacta. */
+  async comentariosDeRevision(repo: string, numero: number | string): Promise<{ autor: string; archivo?: string; linea?: number; texto: string; fragmento?: string; resuelto?: boolean }[]> {
+    const enLinea = await this.pedir<{ user: { login: string } | null; path: string; line: number | null; original_line: number | null; body: string; diff_hunk: string }[]>(`/repos/${repo}/pulls/${numero}/comments?per_page=100`);
+    const generales = await this.pedir<{ user: { login: string } | null; body: string; state: string }[]>(`/repos/${repo}/pulls/${numero}/reviews?per_page=50`);
+    return [
+      ...enLinea.map((c) => ({ autor: c.user?.login ?? '?', archivo: c.path, ...((c.line ?? c.original_line) !== null ? { linea: (c.line ?? c.original_line)! } : {}), texto: c.body, fragmento: c.diff_hunk.split('\n').slice(-6).join('\n') })),
+      ...generales.filter((r) => r.body && r.body.trim() !== '' && r.state !== 'PENDING').map((r) => ({ autor: r.user?.login ?? '?', texto: r.body })),
+    ];
+  }
+
+  /** Trae los cambios de la base a la rama del PR. Solo se usa en los PR de quien tiene la app. */
+  async actualizarRama(repo: string, numero: number | string, sha?: string): Promise<void> {
+    await this.pedir(`/repos/${repo}/pulls/${numero}/update-branch`, { method: 'PUT', body: sha ? { expected_head_sha: sha } : {} });
+  }
+
+  async editarPr(repo: string, numero: number | string, cambios: { title?: string; body?: string }): Promise<string> {
+    const r = await this.pedir<{ html_url: string }>(`/repos/${repo}/pulls/${numero}`, { method: 'PATCH', body: cambios });
+    return r.html_url;
+  }
+
+  /** Abre un PR en borrador. `cabeza` es "rama" o "usuario:rama" cuando sale de una bifurcación. */
+  async crearPrBorrador(repo: string, datos: { titulo: string; cuerpo: string; cabeza: string; base: string }): Promise<{ numero: number; url: string }> {
+    const r = await this.pedir<{ number: number; html_url: string }>(`/repos/${repo}/pulls`, { method: 'POST', body: { title: datos.titulo, body: datos.cuerpo, head: datos.cabeza, base: datos.base, draft: true } });
+    return { numero: r.number, url: r.html_url };
   }
 
   async releases(repo: string): Promise<{ tag: string; publicado: string; activos: { nombre: string; descargas: number }[] }[]> {

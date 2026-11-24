@@ -24,6 +24,17 @@ export interface PrResumen {
   erroresDeFormato?: number;
   /** Último commit del PR: sirve para no revisar dos veces lo mismo. */
   sha?: string;
+  /** Quién tiene pedida la revisión. */
+  revisoresPedidos?: string[];
+  /** Quién pidió cambios y no ha vuelto a opinar. */
+  cambiosPedidosPor?: string[];
+  aprobadoPor?: string[];
+  /** La rama quedó atrás de la base: hay que actualizarla antes de fusionar. */
+  atrasado?: boolean;
+  /** Checks que dependen de una etiqueta (testing-ok, ci-ok) y aún no están en verde. */
+  checksFaltantes?: string[];
+  actualizado?: string;
+  lineas?: number;
 }
 
 export type TipoSugerencia = 'ci' | 'formato' | 'revision-recibida' | 'bloqueo' | 'vencida' | 'abrir-pr' | 'entrega' | 'revisar' | 'espera';
@@ -70,6 +81,13 @@ const primerNombre = (u?: string) => {
   return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : '';
 };
 
+export const tareaCerrada = (estado: string): boolean => CERRADA.test(estado);
+
+/** Las tareas abiertas asignadas a la persona, por su id de ClickUp o por su usuario. */
+export function tareasDe(tareas: TareaClickup[], yo: Identidad): TareaClickup[] {
+  return tareas.filter((t) => !CERRADA.test(t.estado) && ((yo.clickupId !== undefined && t.asignadosIds?.includes(yo.clickupId)) || (yo.clickupUsuario && t.asignados.includes(yo.clickupUsuario))));
+}
+
 const vencida = (t: TareaClickup, ahora: Date) => Boolean(t.vence) && new Date(t.vence!).getTime() < ahora.getTime();
 
 /**
@@ -77,7 +95,7 @@ const vencida = (t: TareaClickup, ahora: Date) => Boolean(t.vence) && new Date(t
  * Las acciones salen ordenadas: primero lo que bloquea a otros.
  */
 export function miDia(tareas: TareaClickup[], prs: PrResumen[], yo: Identidad, perfil: Perfil, ahora = new Date(), rolForzado?: RolId): MiDia {
-  const mias = tareas.filter((t) => !CERRADA.test(t.estado) && ((yo.clickupId !== undefined && t.asignadosIds?.includes(yo.clickupId)) || (yo.clickupUsuario && t.asignados.includes(yo.clickupUsuario))));
+  const mias = tareasDe(tareas, yo);
   const misPrs = prs.filter((p) => yo.github && p.autor === yo.github);
   const rol = inferirRol(mias, yo, perfil, rolForzado);
   const prDe = (codigo: string) => prs.find((p) => codigoDeTitulo(p.titulo) === codigo && p.autor === yo.github) ?? prs.find((p) => codigoDeTitulo(p.titulo) === codigo);
