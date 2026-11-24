@@ -72,3 +72,23 @@ describe('chat libre', () => {
     expect(deltaDeEvento('codex', '{}')).toBeUndefined();
   });
 });
+
+describe('intenciones del piloto y de los bloqueos', () => {
+  it('reconoce preguntas sobre quién frena, también dichas con la voz', () => {
+    for (const t of ['¿Quién me bloquea?', 'quien me esta frenando', 'por qué no puedo avanzar', 'de quién dependo']) expect(detectarIntencion(t)).toBe('quien-bloquea');
+  });
+  it('reconoce el pedido de hacer los pendientes', () => {
+    for (const t of ['hazme mis pendientes', 'prepara mis pendientes', 'haz mi día', 'piloto automático']) expect(detectarIntencion(t)).toBe('piloto');
+  });
+  it('no confunde preguntas normales', () => {
+    expect(detectarIntencion('¿qué tarea tengo?')).toBe('mis-tareas');
+    expect(detectarIntencion('explícame el modelo de datos')).toBeNull();
+  });
+  it('responde sin modelo con quién frena y ofrece el piloto', () => {
+    const dia = { saludo: 'Ana', rol: 'desarrollador', tareas: [], prs: [], paraRevisar: [], acciones: [] } as never;
+    const r = respuestaDeIntencion('quien-bloquea', dia, { bloqueos: [{ tipo: 'dependencia', tarea: 'X-1', causa: 'c', quien: ['luis'], tuTurno: false, dias: 2 }], pasosPiloto: 3 });
+    expect(r.texto).toContain('**luis** frena X-1');
+    expect(r.accion).toBe('piloto');
+    expect(respuestaDeIntencion('quien-bloquea', dia, { bloqueos: [] }).texto).toContain('Nadie te frena');
+  });
+});

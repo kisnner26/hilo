@@ -1,4 +1,5 @@
 import { extractoRelevante } from './ahorro.js';
+import { quienMeBloquea, type Bloqueo } from './bloqueos.js';
 import type { TareaClickup } from './clickup.js';
 import type { MiDia, PrResumen } from './midia.js';
 import type { Perfil } from './profile.js';
@@ -6,7 +7,7 @@ import { promptDeRol, type Estilo } from './roles.js';
 
 /** Chat libre: lo que se contesta sin gastar tokens (datos que ya tenemos) y cómo se arma el contexto del agente. */
 
-export type Intencion = 'mis-tareas' | 'mi-dia' | 'mis-prs' | 'saludo' | null;
+export type Intencion = 'mis-tareas' | 'mi-dia' | 'mis-prs' | 'saludo' | 'quien-bloquea' | 'piloto' | null;
 export type AccionTarea = 'entender' | 'hacer' | 'revisar' | 'bloqueo';
 
 export interface Tarjeta {
@@ -22,6 +23,14 @@ export interface RespuestaInmediata {
   texto: string;
   tarjetas: Tarjeta[];
   pregunta?: string;
+  /** Un botón que la interfaz dibuja bajo la respuesta. */
+  accion?: 'piloto';
+}
+
+export interface DatosExtra {
+  bloqueos?: Bloqueo[];
+  /** Cuántos pasos tiene hoy el piloto automático. */
+  pasosPiloto?: number;
 }
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -29,6 +38,8 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 /** Reconoce con reglas simples las preguntas que se pueden responder con datos que la app ya tiene. */
 export function detectarIntencion(texto: string): Intencion {
   const t = norm(texto);
+  if (/\bquien\s+(me\s+)?(esta\s+)?(bloquea|bloqueando|frena|frenando|detiene|atrasa)\b|\bque\s+me\s+(bloquea|frena|detiene)\b|\bpor\s+que\s+no\s+(puedo|logro)\s+avanzar\b|\bde\s+quien\s+(dependo|espero)\b/.test(t)) return 'quien-bloquea';
+  if (/\b(haz(me)?|hac(e|er)(me)?|prepara(r|me)?|resuelve|ocupate\s+de|encargate\s+de)\b.*\b(pendientes|mis\s+tareas|todo)\b|\bpiloto(\s+automatico)?\b|\bhaz\s+mi\s+dia\b/.test(t)) return 'piloto';
   if (/\b(mis|mi)\s+(pr|prs|pull request|pull requests)\b|\bque\s+prs?\s+tengo\b/.test(t)) return 'mis-prs';
   if (/\bque\s+(tareas?|pendientes?)\s+(tengo|me\s+tocan|hay)\b|\bmis\s+tareas?\b|\bmi\s+tarea\b|\bque\s+me\s+toca\b|\bque\s+tengo\s+(que\s+hacer|pendiente)/.test(t)) return 'mis-tareas';
   if (/\bque\s+(hago|debo\s+hacer|toca\s+hacer|sigue)\b|\bmi\s+dia\b|\bpor\s+donde\s+empiezo\b|\bque\s+hago\s+hoy\b/.test(t)) return 'mi-dia';
@@ -38,13 +49,31 @@ export function detectarIntencion(texto: string): Intencion {
 
 const vence = (t: TareaClickup) => (t.vence ? ` · vence ${t.vence.slice(0, 10)}` : '');
 
-export function respuestaDeIntencion(i: Exclude<Intencion, null>, dia: MiDia): RespuestaInmediata {
+export function respuestaDeIntencion(i: Exclude<Intencion, null>, dia: MiDia, extra: DatosExtra = {}): RespuestaInmediata {
   const prDe = (codigo: string) => dia.prs.find((p) => new RegExp(`^\\[${codigo}\\]`).test(p.titulo));
   if (i === 'saludo') {
     return {
       texto: `Hola, ${dia.saludo}. Soy el asistente del proyecto y sé tu rol (${dia.rol}), tus tareas de ClickUp y tus PR de GitHub. Puedes preguntarme lo que quieras: qué tarea tienes, qué hacer hoy, cómo entender una tarea, cómo revisar un PR, o dudas del código y del contrato.`,
       tarjetas: [],
     };
+  }
+  if (i === 'quien-bloquea') {
+    const bs = extra.bloqueos ?? [];
+    const culpables = quienMeBloquea(bs);
+    const tuyos = bs.filter((b) => b.tuTurno);
+    if (culpables.length === 0 && tuyos.length === 0) return { texto: 'Nadie te frena ahora mismo: no encontré dependencias abiertas ni PR esperando a otra persona.', tarjetas: [] };
+    const partes = culpables.map((c) => `- **${c.quien}** frena ${c.tareas.join(', ')}${c.masAntiguo > 0 ? ` (hace ${c.masAntiguo} día${c.masAntiguo === 1 ? '' : 's'})` : ''}`);
+    const tuTurno = tuyos.slice(0, 4).map((b) => `- ${b.tarea}: ${b.causa}`);
+    return {
+      texto: [culpables.length ? 'Esto es lo que te frena y quién lo destraba:' : '', ...partes, tuTurno.length ? '\nY esto depende de ti:' : '', ...tuTurno].filter(Boolean).join('\n'),
+      tarjetas: [],
+      ...((extra.pasosPiloto ?? 0) > 0 ? { pregunta: 'Puedo dejar redactados los recordatorios para cada uno: usa «Hacer mis pendientes».', accion: 'piloto' as const } : {}),
+    };
+  }
+  if (i === 'piloto') {
+    const n = extra.pasosPiloto ?? 0;
+    if (n === 0) return { texto: 'No hay nada que preparar ahora mismo: ya estás al día.', tarjetas: [] };
+    return { texto: `Tengo ${n} paso${n === 1 ? '' : 's'} listo${n === 1 ? '' : 's'} para prepararte. Los que no necesitan modelo salen gratis; lo que llega a otras personas queda en la bandeja hasta que lo apruebes.`, tarjetas: [], accion: 'piloto' };
   }
   if (i === 'mis-tareas') {
     if (dia.tareas.length === 0) return { texto: 'No tienes tareas abiertas asignadas en las listas que sigues. Si esperabas alguna, revisa en Ajustes qué listas de ClickUp seguir.', tarjetas: [] };
