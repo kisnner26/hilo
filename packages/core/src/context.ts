@@ -176,7 +176,9 @@ export function buscarNotas(notas: Nota[], consulta: string, k = 5): { nota: Not
 export type Alcance =
   | { tipo: 'todo' }
   | { tipo: 'comunidad'; id: number }
-  | { tipo: 'vecindad'; nodo: string; saltos: number };
+  | { tipo: 'vecindad'; nodo: string; saltos: number }
+  /** Varios nodos fijados a mano: la unión de sus vecindades, para armar un paquete a la medida. */
+  | { tipo: 'nodos'; ids: string[]; saltos: number };
 
 export interface OpcionesContexto {
   alcance: Alcance;
@@ -239,6 +241,11 @@ export function paqueteDeContexto(g: Grafo, o: OpcionesContexto, prefijoFijo = '
   if (o.alcance.tipo === 'vecindad') {
     const v = vecindad(g, o.alcance.nodo, o.alcance.saltos);
     candidatos = candidatos.filter((n) => v.has(n.id));
+  }
+  if (o.alcance.tipo === 'nodos') {
+    const a = o.alcance;
+    const union = new Set(a.ids.flatMap((id) => [...vecindad(g, id, a.saltos)]));
+    candidatos = candidatos.filter((n) => union.has(n.id));
   }
   if (o.sinRuido) {
     // Sin archivo propio = librería externa importada (org.junit..., java.util...): mucho grado, nada que aportar.

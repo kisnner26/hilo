@@ -60,3 +60,13 @@ describe('ahorro de tokens', () => {
     expect(promptDeRol('tester', p)).not.toContain('Responde corto');
   });
 });
+
+describe('paquete a la medida con varios nodos fijados', () => {
+  const nodo = (id: string) => ({ id, label: id, archivo: `src/${id}.ts`, comunidad: 1, nombreComunidad: 'c' });
+  const g = { nodos: ['A', 'B', 'C', 'D', 'E'].map(nodo), enlaces: [{ origen: 'A', destino: 'B', relacion: 'usa' }, { origen: 'D', destino: 'E', relacion: 'usa' }] };
+  it('junta solo las vecindades de lo fijado y deja fuera el resto', () => {
+    const p = paqueteDeContexto(g, { alcance: { tipo: 'nodos', ids: ['A', 'D'], saltos: 1 }, conciso: true, sinRuido: true, presupuesto: 1000 });
+    expect(p.nodos).toBe(4);
+    expect(p.texto).not.toContain('- C ');
+  });
+});
