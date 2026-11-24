@@ -22,3 +22,4 @@ export * from './digestos.js';
 export * from './uso.js';
 export * from './espacio.js';
 export * from './autopiloto.js';
+export * from './analisis-grafo.js';

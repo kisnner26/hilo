@@ -4,6 +4,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "scripts": { "build": "tsc -b" }
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./analisis-grafo": {
+      "types": "./dist/analisis-grafo.d.ts",
+      "default": "./dist/analisis-grafo.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
 }
