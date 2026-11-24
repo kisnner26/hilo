@@ -371,12 +371,12 @@ const PASOS_DEMO: PasoAutoVista[] = [
   { id: 'explicar-bloqueo:BFA-FE-01', tipo: 'explicar-bloqueo', ref: 'BFA-FE-01', titulo: 'Explicar el bloqueo de BFA-FE-01', ejecutor: 'hilo', salida: 'comentario-clickup', escritura: false, peso: 'ligero', prioridad: 3 },
   { id: 'iniciar-tarea:GEN-04-FE', tipo: 'iniciar-tarea', ref: 'GEN-04-FE', titulo: 'Hacer la primera pieza de GEN-04-FE', ejecutor: 'agente', salida: 'rama-y-pr', escritura: true, peso: 'completo', prioridad: 4 },
   { id: 'entregar:GEN-01-BE', tipo: 'entregar', ref: 'GEN-01-BE', titulo: 'Comentar la entrega de GEN-01-BE', ejecutor: 'hilo', salida: 'comentario-clickup', escritura: false, peso: 'ligero', prioridad: 5 },
-  { id: 'avisar:espera-revision:88', tipo: 'avisar', ref: '#88', titulo: 'Avisar a over2099: El #88 espera su revisión desde hace 3 días', ejecutor: 'hilo', salida: 'comentario-github', escritura: false, peso: 'ligero', prioridad: 7 },
+  { id: 'avisar:espera-revision:88', tipo: 'avisar', ref: '#88', titulo: 'Avisar a marta-rev: El #88 espera su revisión desde hace 3 días', ejecutor: 'hilo', salida: 'comentario-github', escritura: false, peso: 'ligero', prioridad: 7 },
 ];
 const PLAN_DEMO: PlanAutoVista = {
   pasos: PASOS_DEMO,
   bloqueos: [
-    { tipo: 'espera-revision', tarea: 'GEN-01-BE', pr: 88, causa: 'El #88 espera la revisión de over2099 desde hace 3 días.', quien: ['over2099'], tuTurno: false, dias: 3 },
+    { tipo: 'espera-revision', tarea: 'GEN-01-BE', pr: 88, causa: 'El #88 espera la revisión de marta-rev desde hace 3 días.', quien: ['marta-rev'], tuTurno: false, dias: 3 },
     { tipo: 'dependencia', tarea: 'BFA-FE-01', causa: 'Depende de GEN-00-API (in progress).', quien: ['luis-dev'], tuTurno: false, dias: 0 },
     { tipo: 'dependencia', tarea: 'GEN-04-FE', causa: 'Depende de GEN-04-BE (in review).', quien: ['luis-dev'], tuTurno: false, dias: 0 },
     { tipo: 'espera-testing', tarea: 'GEN-01-BE', pr: 88, causa: 'Al #88 le falta testing-ok: Testing debe dar conformidad.', quien: ['Testing'], tuTurno: false, dias: 2 },
@@ -384,7 +384,7 @@ const PLAN_DEMO: PlanAutoVista = {
   ],
   culpables: [
     { quien: 'luis-dev', bloqueos: 2, tareas: ['BFA-FE-01', 'GEN-04-FE'], masAntiguo: 0 },
-    { quien: 'over2099', bloqueos: 1, tareas: ['GEN-01-BE'], masAntiguo: 3 },
+    { quien: 'marta-rev', bloqueos: 1, tareas: ['GEN-01-BE'], masAntiguo: 3 },
     { quien: 'Testing', bloqueos: 1, tareas: ['GEN-01-BE'], masAntiguo: 2 },
   ],
 };
@@ -434,13 +434,13 @@ const DEMO_DIA: MiDiaVista = {
     { id: '2', codigo: 'UI-02', nombre: 'UI-02 — navegación y flujo', estado: 'Open', asignados: ['ANA PEREZ'], vence: '2026-11-18T10:00:00Z', dependeDe: [] },
     { id: '3', codigo: 'GEN-04-FE', nombre: 'GEN-04-FE — finalización', estado: 'Open', asignados: ['ANA PEREZ'], dependeDe: ['x'] },
   ],
-  prs: [{ numero: 42, titulo: '[GEN-01-FE] catálogo de tests', autor: 'ana-dev', rama: 'feature/ana-GEN-01-FE', borrador: true, url: 'https://github.com/Nell16/sistema-evaluaciones/pull/42', ci: 'fallo', revision: 'requerida', estadoFusion: 'BEHIND', pidenMiRevision: false, erroresDeFormato: 2 }],
+  prs: [{ numero: 42, titulo: '[GEN-01-FE] catálogo de tests', autor: 'ana-dev', rama: 'feature/ana-GEN-01-FE', borrador: true, url: 'https://github.com/acme/plataforma/pull/42', ci: 'fallo', revision: 'requerida', estadoFusion: 'BEHIND', pidenMiRevision: false, erroresDeFormato: 2 }],
   paraRevisar: [],
   acciones: [
     { prioridad: 1, tipo: 'ci', texto: 'El CI del #42 falló: corrígelo antes de pedir revisión.', ref: '#42' },
     { prioridad: 2, tipo: 'formato', texto: 'El #42 tiene 2 error(es) de formato: corrígelos de una vez.', ref: '#42' },
     { prioridad: 3, tipo: 'vencida', texto: 'UI-02 venció el 2026-11-18: entrega o avisa una fecha nueva.', ref: 'UI-02' },
-    { prioridad: 5, tipo: 'entrega', texto: 'GEN-01-FE tiene el PR #42 pero sigue en "in progress": comenta la entrega.', ref: 'GEN-01-FE', preparado: 'Entrega GEN-01-FE\n\nEnlace: https://github.com/Nell16/sistema-evaluaciones/pull/42\nSHA probado: FALTA\n\nContribución de cada participante:\n- ANA PEREZ\n\nPendiente del equipo (Integración, Testing, Documentación):\n- testing-ok y revisión de Integración' },
+    { prioridad: 5, tipo: 'entrega', texto: 'GEN-01-FE tiene el PR #42 pero sigue en "in progress": comenta la entrega.', ref: 'GEN-01-FE', preparado: 'Entrega GEN-01-FE\n\nEnlace: https://github.com/acme/plataforma/pull/42\nSHA probado: FALTA\n\nContribución de cada participante:\n- ANA PEREZ\n\nPendiente del equipo (Integración, Testing, Documentación):\n- testing-ok y revisión de Integración' },
     { prioridad: 6, tipo: 'espera', texto: 'GEN-04-FE espera a GEN-04-BE.', ref: 'GEN-04-FE' },
   ],
 };
@@ -487,12 +487,12 @@ export const api = {
   comprobarActualizacion: (): Promise<ActualizacionVista> =>
     enElectron
       ? inv('actualizar:comprobar')
-      : new Promise((r) => setTimeout(() => r({ hay: true, actual: '0.1.3', ultima: '0.2.0', notas: 'Piloto automático, quién te frena, dictado con Whisper en español e inglés, grafo con impacto y actualizaciones desde la app.', pagina: 'https://github.com/kisnner26/hilo/releases', publicada: new Date().toISOString(), asset: { nombre: 'Hilo-0.2.0-arm64-mac.zip', tam: 118_000_000 } }), 900)),
+      : new Promise((r) => setTimeout(() => r({ hay: true, actual: '0.1.3', ultima: '0.2.0', notas: 'Piloto automático, quién te frena, dictado con Whisper en español e inglés, grafo con impacto y actualizaciones desde la app.', pagina: 'https://github.com/lucia-int/hilo/releases', publicada: new Date().toISOString(), asset: { nombre: 'Hilo-0.2.0-arm64-mac.zip', tam: 118_000_000 } }), 900)),
   instalarActualizacion: (): Promise<void> => (enElectron ? inv('actualizar:instalar') : Promise.resolve()),
   actualizacionesAuto: (v: boolean): Promise<void> => (enElectron ? inv('actualizar:auto', v) : Promise.resolve()),
   paginaActualizacion: (): Promise<void> => (enElectron ? inv('actualizar:pagina') : Promise.resolve()),
   alActualizar: (cb: (e: EventoActualizar) => void): (() => void) => (enElectron ? window.hilo!.alActualizar((e) => cb(e as EventoActualizar)) : () => {}),
-  dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ motor: 'apple', disponible: true, plataforma: 'darwin', escuchando: false, whisper: { herramienta: true, modelo: false, archivoModelo: 'ggml-small-q5_1.bin' } })),
+  dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ motor: 'whisper', disponible: true, plataforma: 'darwin', escuchando: false, whisper: { herramienta: true, modelo: true, archivoModelo: 'ggml-small-q5_1.bin' } })),
   dictadoIniciar: (idioma: IdiomaVoz): Promise<void> => {
     if (enElectron) return inv('dictado:iniciar', idioma);
     dictadoDemo();
@@ -539,8 +539,8 @@ export const api = {
     return Promise.resolve({
       github: conectado ? { conectado: true, login: 'ana-dev', nombre: 'Ana Pérez', origen: 'gh', ghInstalado: true } : { conectado: false, ghInstalado: true },
       clickup: conectado ? { conectado: true, usuario: 'ANA PEREZ' } : { conectado: false },
-      repos: ['Nell16/sistema-evaluaciones'],
-      repo: 'Nell16/sistema-evaluaciones',
+      repos: ['acme/plataforma'],
+      repo: 'acme/plataforma',
       avisos: true,
       ...(q.get('rol') ? { rol: q.get('rol')! } : {}),
     });
@@ -572,7 +572,7 @@ export const api = {
   cola: (): Promise<ColaVista> =>
     enElectron
       ? inv('cola:cargar')
-      : Promise.resolve({ cola: [{ numero: 79, autor: 'luis-dev', rondas: 3, lineas: 521, listo: true }, { numero: 42, autor: 'ana-dev', rondas: 2, lineas: 400, listo: false }], asignaciones: [{ numero: 79, integrador: 'over2099', motivo: 'menor carga' }], metricas: { prs: 2, rondasPromedio: 2.5, conMasDeTresRondas: [], cargaPorIntegrador: { kisnner26: 5, over2099: 0 }, concentracion: 1 }, integradores: ['kisnner26', 'over2099'] }),
+      : Promise.resolve({ cola: [{ numero: 79, autor: 'luis-dev', rondas: 3, lineas: 521, listo: true }, { numero: 42, autor: 'ana-dev', rondas: 2, lineas: 400, listo: false }], asignaciones: [{ numero: 79, integrador: 'marta-rev', motivo: 'menor carga' }], metricas: { prs: 2, rondasPromedio: 2.5, conMasDeTresRondas: [], cargaPorIntegrador: { 'lucia-int': 5, 'marta-rev': 0 }, concentracion: 1 }, integradores: ['lucia-int', 'marta-rev'] }),
   plan: (o: { dias: number; capacidad: number }): Promise<PlanVista> =>
     enElectron
       ? inv('plan:generar', o)
@@ -592,7 +592,7 @@ export const api = {
   config: (): Promise<Config> => (enElectron ? inv('config:get') : Promise.resolve({})),
   guardarConfig: (c: Config): Promise<Config> => (enElectron ? inv('config:set', c) : Promise.resolve(c)),
   perfil: (): Promise<PerfilVista> =>
-    enElectron ? inv('perfil:get') : Promise.resolve({ name: 'Sistema de evaluaciones (UAM)', modelos: MODELOS_DEMO, limites: { lineasPorPr: 400 } }),
+    enElectron ? inv('perfil:get') : Promise.resolve({ name: 'Plataforma de evaluaciones', modelos: MODELOS_DEMO, limites: { lineasPorPr: 400 } }),
   abrir: (tipo: 'archivo' | 'carpeta'): Promise<string | undefined> => (enElectron ? inv('dialogo:abrir', tipo) : Promise.resolve(undefined)),
   notas: (): Promise<NotaVista[]> =>
     enElectron
