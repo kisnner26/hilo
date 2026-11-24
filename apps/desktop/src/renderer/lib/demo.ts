@@ -13,7 +13,7 @@ export function grafoDemo(): { nodos: NodoVista[]; enlaces: EnlaceVista[] } {
     for (let i = 0; i < n; i++) {
       const id = `${nombre}-${i}`;
       ids.push(id);
-      nodos.push({ id, label: `${nombre}/${nombre === 'tareas' ? 'BFA-BE-' + (i + 1) : 'nota-' + (i + 1)}`, comunidad: c, nombreComunidad: nombre, tipo: 'nota' });
+      nodos.push({ id, label: `${nombre}/${nombre === 'tareas' ? 'BFA-BE-' + (i + 1) : 'nota-' + (i + 1)}`, comunidad: c, nombreComunidad: nombre, tipo: 'nota', archivo: `${nombre}/${nombre === 'tareas' ? 'BFA-BE-' + (i + 1) : 'nota-' + (i + 1)}.md` });
       if (i > 0) {
         const padre = i < 6 ? 0 : Math.floor(azar() * i * 0.6);
         enlaces.push({ origen: id, destino: ids[padre] as string, relacion: 'enlaza' });

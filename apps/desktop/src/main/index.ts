@@ -102,7 +102,7 @@ function crearVentana(): void {
     title: 'Hilo',
     // Fondo propio y constante: el cristal lo dibuja la app. Así el tono no depende del escritorio ni cambia en pantalla completa.
     backgroundColor: '#070708',
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 20, y: 18 } } : {}),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   ventana.webContents.setWindowOpenHandler(({ url }) => {
@@ -460,7 +460,7 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
     }
     conv.creada = true;
     registrarUso({ fecha: new Date().toISOString(), paso: p.tarea ? `chat-${p.tarea.accion}` : 'chat', ref: p.tarea?.ref ?? '-', modelo: `${asignado.modelo} · ${asignado.esfuerzo}`, ms: r.duracionMs, ...(r.uso ? { uso: r.uso } : {}), evitados: evitadosChat });
-    emitir({ tipo: 'fin', texto: r.texto, ms: r.duracionMs });
+    emitir({ tipo: 'fin', texto: r.texto, ms: r.duracionMs, ...(r.uso ? { tokens: r.uso.entrada + r.uso.cacheCreada + r.uso.salida } : {}) });
   } catch (e) {
     emitir({ tipo: 'error', texto: core.errorLegible(e, 'claude') });
   }
