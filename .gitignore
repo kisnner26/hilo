@@ -6,4 +6,4 @@ release
 *.log
 .DS_Store
 *.tsbuildinfo
-native/bin
+**/native/bin
