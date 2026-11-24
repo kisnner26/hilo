@@ -23,3 +23,5 @@ export * from './uso.js';
 export * from './espacio.js';
 export * from './autopiloto.js';
 export * from './analisis-grafo.js';
+export * from './whisper.js';
+export * from './audio.js';
