@@ -10,6 +10,7 @@ import * as core from '@hilo/core';
 import { registrarAutopiloto, registrarUso } from './autopiloto';
 import { registrarActualizador } from './actualizador';
 import { registrarDictado } from './dictado';
+import { asignadoParaAgente, registrarMotores } from './motores';
 
 type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola' | 'autopiloto';
 interface Programada {
@@ -50,6 +51,9 @@ interface Config {
   /** Listas de ClickUp que se siguen. Si no hay, se usan las del perfil. */
   listasClickup?: string[];
   avisos?: boolean;
+  /** Motor de IA: automático (el mejor que haya) o uno elegido a mano. */
+  motor?: 'auto' | core.MotorId;
+  ollamaModelo?: string;
   /** Revisar si hay una versión nueva cada pocas horas (solo avisa, no instala). Por defecto sí. */
   actualizacionesAuto?: boolean;
   /** Repositorio donde se publican los releases de Hilo, para contar descargas. */
@@ -374,6 +378,8 @@ interface Conversacion {
   creada: boolean;
 }
 const conversaciones = new Map<string, Conversacion>();
+let motores: ReturnType<typeof registrarMotores>;
+const historiales = new Map<string, string[]>();
 let diaCache: { hasta: number; dia: core.MiDia } | undefined;
 let calculoCache: { hasta: number; r: Awaited<ReturnType<typeof calcularMiDia>> } | undefined;
 
@@ -459,7 +465,28 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
 
     const contextoBase = ah.resumen ? core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }) : core.paqueteDeContexto(grafo, { alcance: { tipo: 'todo' }, rol: dia.rol, conciso: true, sinRuido: true, presupuesto: ah.presupuesto }).texto;
     const sistema = core.promptSistemaChat(perfil, dia, contextoBase, repo, ah.estiloBreve ? 'breve' : 'normal');
-    const asignado = perfil.modelos.asistente;
+    const motor = await motores.elegido();
+    if (motor.id === 'reglas') {
+      // Sin ninguna IA: se busca en las notas y en el mapa, y para una tarea se muestran sus datos.
+      const base = p.tarea ? `Sin un modelo de IA no puedo explicarla ni proponer un plan, pero esto es lo que consta de ${p.tarea.ref}:\n\n${prompt.split('\n\n').slice(1).join('\n\n') || '(sin más datos)'}\n\n_Conecta Claude Code o Codex, o activa un modelo en tu equipo en Ajustes › Modelos, para que lo explique._` : undefined;
+      emitir({ tipo: 'respuesta', ...(base ? { texto: base, tarjetas: [] } : core.respuestaSinIa(p.texto ?? '', notas, grafo)) });
+      return;
+    }
+    if (core.esModeloLocal(motor.id)) {
+      // Modelo en tu equipo: poco contexto y sin el resumen del proyecto; se le recuerda lo último de la charla.
+      const sistemaLocal = core.recortarParaLocal(core.promptSistemaChat(perfil, dia, '', repo, 'breve'), 900);
+      const previo = (historiales.get(p.conv) ?? []).slice(-4).join('\n');
+      const promptLocal = [previo && `Conversación reciente:\n${previo}`, prompt].filter(Boolean).join('\n\n');
+      const etiqueta = motor.modelo ? `${motor.nombre} · ${motor.modelo}` : motor.nombre;
+      emitir({ tipo: 'inicio', modelo: etiqueta });
+      const t0 = Date.now();
+      const texto = await motores.generar(motor, { sistema: sistemaLocal, prompt: promptLocal, alTexto: (delta) => emitir({ tipo: 'delta', texto: delta }) });
+      historiales.set(p.conv, [...(historiales.get(p.conv) ?? []), `Yo: ${(p.texto ?? prompt).slice(0, 400)}`, `Asistente: ${texto.slice(0, 500)}`].slice(-8));
+      registrarUso({ fecha: new Date().toISOString(), paso: p.tarea ? `chat-${p.tarea.accion}` : 'chat', ref: p.tarea?.ref ?? '-', modelo: etiqueta, ms: Date.now() - t0, local: true, evitados: [...evitadosChat, { tecnica: 'modelo-local', antes: core.estimarTokens(sistemaLocal + promptLocal), despues: 0 }] });
+      emitir({ tipo: 'fin', texto, ms: Date.now() - t0 });
+      return;
+    }
+    const asignado = asignadoParaAgente(motor.id, perfil.modelos.asistente);
     const cwd = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : (cfg.boveda ?? raizDatos());
     emitir({ tipo: 'inicio', modelo: `${asignado.modelo} · ${asignado.esfuerzo}` });
     const r = await core.ejecutar({
@@ -904,6 +931,7 @@ void app.whenReady().then(() => {
   registrarIpcExtra();
   registrarIpcConexiones();
   registrarDictado(enviar);
+  motores = registrarMotores({ config: leerConfig, guardar: (patch) => void guardarConfig({ ...leerConfig(), ...patch }) });
   registrarActualizador({
     enviar,
     avisar,
@@ -927,6 +955,8 @@ void app.whenReady().then(() => {
     confirmar: confirmarPublicacion,
     avisar,
     raizDatos,
+    motor: () => motores.elegido(),
+    generarLocal: (m, p) => motores.generar(m, p),
   });
   prepararAutopiloto = auto.prepararSinTokens;
   setInterval(() => void tickProgramadas(), 60_000);

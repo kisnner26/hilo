@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as core from '@hilo/core';
+import { asignadoParaAgente } from './motores';
 
 /**
  * Autopiloto: prepara en lote todo lo que le toca a la persona y lo deja en una bandeja.
@@ -21,6 +22,9 @@ export interface DepsAuto {
   confirmar(destino: string, texto: string): Promise<boolean>;
   avisar(texto: string): void;
   raizDatos(): string;
+  /** Qué IA se usa ahora. */
+  motor(): Promise<{ id: core.MotorId; nombre: string; modelo?: string }>;
+  generarLocal(m: { id: core.MotorId; nombre: string; modelo?: string }, p: core.PedidoLocal): Promise<string>;
 }
 
 export interface ItemBandeja {
@@ -76,12 +80,18 @@ export function registrarAutopiloto(d: DepsAuto): { prepararSinTokens: () => Pro
     const { dia, bruto } = await d.calcular(true);
     const perfil = d.perfil();
     const bloqueos = core.analizarBloqueos(bruto.tareas, bruto.prs, bruto.yo, perfil);
-    return { dia, bruto, bloqueos, culpables: core.quienMeBloquea(bloqueos), pasos: core.planAutopiloto(dia, bloqueos, perfil, opciones) };
+    const todos = core.planAutopiloto(dia, bloqueos, perfil, opciones);
+    // Editar código y arreglar el CI necesita un agente de suscripción; redactar puede hacerlo un modelo local.
+    const m = await d.motor();
+    const sirve = (x: core.PasoAuto) => x.ejecutor === 'hilo' || (core.esAgente(m.id) ? true : m.id !== 'reglas' && !x.escritura);
+    const pasos = todos.filter(sirve);
+    const omitidos = todos.filter((x) => !sirve(x)).map((x) => ({ id: x.id, titulo: x.titulo, motivo: x.escritura ? 'Editar código necesita Claude Code o Codex.' : 'Redactar necesita una IA: activa un modelo en Ajustes › Modelos.' }));
+    return { dia, bruto, bloqueos, culpables: core.quienMeBloquea(bloqueos), pasos, omitidos, motor: m };
   }
 
   ipcMain.handle('auto:plan', async () => {
     const p = await plan();
-    return { bloqueos: p.bloqueos, culpables: p.culpables, pasos: p.pasos, corriendo: corriendo?.id };
+    return { bloqueos: p.bloqueos, culpables: p.culpables, pasos: p.pasos, omitidos: p.omitidos, motor: p.motor.nombre, corriendo: corriendo?.id };
   });
   ipcMain.handle('auto:bandeja', () => items().slice(-60).reverse());
   ipcMain.handle('auto:cancelar', () => corriendo?.control.abort());
@@ -180,13 +190,22 @@ export function registrarAutopiloto(d: DepsAuto): { prepararSinTokens: () => Pro
     const cu = d.clickup();
     const tareaClick = paso.tarea ? p.dia.tareas.find((t) => t.codigo === paso.tarea) : undefined;
     const detalle = tareaClick && cu ? await cu.detalleTarea(tareaClick.id).catch(() => undefined) : undefined;
-    const asignado = core.modeloDelPaso(paso, perfil, ah);
+    const asignadoBase = core.modeloDelPaso(paso, perfil, ah);
     const tope = core.topeDelPaso(paso, ah);
     const cwdLectura = cfg.proyecto && existsSync(cfg.proyecto) ? cfg.proyecto : d.raizDatos();
     const sistema = core.promptDeRol(paso.escritura ? 'desarrollador' : 'documentador', perfil, ah.estiloBreve ? 'breve' : 'normal');
-    const correrAgente = (prompt: string, cwd: string, escritura: boolean) =>
-      core.ejecutar({ asignado, sistema: asignado.cli === 'claude' ? sistema : undefined, prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`, cwd, soloLectura: !escritura, escritura, ...(asignado.cli === 'claude' ? { presupuestoUsd: tope, sinSesion: true } : {}), senal, alTexto });
-    const modelo = `${asignado.modelo} · ${asignado.esfuerzo}`;
+    const motorAhora = await d.motor();
+    const asignado = asignadoParaAgente(motorAhora.id, asignadoBase);
+    const correrAgente = async (prompt: string, cwd: string, escritura: boolean) => {
+      if (core.esModeloLocal(motorAhora.id) && !escritura) {
+        const t0 = Date.now();
+        const texto = await d.generarLocal(motorAhora, { sistema: sistema, prompt, alTexto });
+        evitados.push({ tecnica: 'modelo-local', antes: core.estimarTokens(sistema + prompt), despues: 0 });
+        return { texto, codigoSalida: 0, duracionMs: Date.now() - t0, eventos: 0 } as core.Resultado;
+      }
+      return core.ejecutar({ asignado, sistema: asignado.cli === 'claude' ? sistema : undefined, prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`, cwd, soloLectura: !escritura, escritura, ...(asignado.cli === 'claude' ? { presupuestoUsd: tope, sinSesion: true } : {}), senal, alTexto });
+    };
+    const modelo = core.esModeloLocal(motorAhora.id) && !paso.escritura ? motorAhora.nombre : `${asignado.modelo} · ${asignado.esfuerzo}`;
 
     if (!paso.escritura) {
       let ctx: core.ContextoPaso = { ...(detalle ? { tarea: detalle } : {}) };

@@ -63,6 +63,9 @@ const CANALES = [
   'actualizar:instalar',
   'actualizar:auto',
   'actualizar:pagina',
+  'motor:estado',
+  'motor:fijar',
+  'motor:ollama-modelo',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
