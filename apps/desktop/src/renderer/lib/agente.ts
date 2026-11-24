@@ -19,3 +19,20 @@ export function alPreguntarAlAgente(cb: (p: PedidoAgente) => void): () => void {
   window.addEventListener(EVENTO, f);
   return () => window.removeEventListener(EVENTO, f);
 }
+
+const DICTAR = 'hilo:dictar';
+/** Pide que el Asistente empiece o termine de escuchar (atajo global). */
+export const pedirDictado = (): void => void window.dispatchEvent(new Event(DICTAR));
+export function alPedirDictado(cb: () => void): () => void {
+  window.addEventListener(DICTAR, cb);
+  return () => window.removeEventListener(DICTAR, cb);
+}
+
+const IR = 'hilo:ir';
+/** Pide a la app que cambie de sección (por ejemplo, desde un botón dentro del chat). */
+export const irASeccion = (id: string): void => void window.dispatchEvent(new CustomEvent<string>(IR, { detail: id }));
+export function alIrASeccion(cb: (id: string) => void): () => void {
+  const f = (e: Event) => cb((e as CustomEvent<string>).detail);
+  window.addEventListener(IR, f);
+  return () => window.removeEventListener(IR, f);
+}

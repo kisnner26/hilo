@@ -14,7 +14,7 @@ import { BarraTitulo } from './components/BarraTitulo';
 import { InspectorNodo } from './components/InspectorNodo';
 import { PaqueteFijado } from './components/PaqueteFijado';
 import { Paleta } from './components/Paleta';
-import { alPreguntarAlAgente } from './lib/agente';
+import { alIrASeccion, alPreguntarAlAgente, pedirDictado } from './lib/agente';
 import { useDisposicion } from './lib/disposicion';
 import { verGrafo } from './lib/grafoDatos';
 import { api, enElectron, type Conexion, type PerfilVista } from './lib/api';
@@ -87,11 +87,17 @@ export function App() {
   const mac = (typeof window !== 'undefined' && window.hilo?.plataforma === 'darwin') || (!enElectron && /[?&]mac\b/.test(location.search));
 
   useEffect(() => alPreguntarAlAgente(() => setVista('asistente')), []);
+  useEffect(() => alIrASeccion((id) => setVista(id as Vista)), []);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaleta((x) => !x);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setVista('asistente');
+        setTimeout(pedirDictado, 60);
       }
     };
     window.addEventListener('keydown', f);

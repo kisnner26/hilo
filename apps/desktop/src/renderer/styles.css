@@ -732,3 +732,30 @@ html:not(.cristal) body, body { background: radial-gradient(1000px 640px at 14% 
 .fila-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .fila-titulo h2 { margin: 0; }
 @media (max-width: 900px) { .ayuda { left: 14px; right: 14px; width: auto; } }
+
+/* ---------- Dictado por voz ---------- */
+.microfono { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--v-borde); background: rgba(255, 255, 255, 0.07); color: var(--texto); transition: background 0.2s, transform 0.15s, box-shadow 0.3s; }
+.microfono:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); transform: scale(1.05); }
+.microfono:disabled { opacity: 0.35; cursor: default; }
+.microfono.activo { background: #ff5d6c; border-color: #ff8a95; color: #fff; box-shadow: 0 0 0 0 rgba(255, 93, 108, 0.55); animation: respira 1.6s ease-out infinite; }
+@keyframes respira { 70% { box-shadow: 0 0 0 12px rgba(255, 93, 108, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 93, 108, 0); } }
+.ondas { display: flex; align-items: center; gap: 3px; height: 16px; }
+.ondas i { width: 3px; height: 6px; border-radius: 2px; background: #fff; animation: onda 0.9s ease-in-out infinite; }
+.ondas i:nth-child(2) { animation-delay: 0.15s; }
+.ondas i:nth-child(3) { animation-delay: 0.3s; }
+.ondas i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes onda { 50% { height: 16px; } }
+.estado-voz { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 24px 8px; padding: 8px 14px; border-radius: 14px; border: 1px solid var(--v-borde); background: rgba(255, 255, 255, 0.05); font-size: 12px; color: var(--suave); }
+.estado-voz.con-error { border-color: rgba(255, 107, 107, 0.45); color: #ffb3b3; }
+.estado-voz .auto-voz { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.punto-voz { width: 8px; height: 8px; border-radius: 50%; background: #ff5d6c; animation: latido 1s ease-in-out infinite; }
+
+/* ---------- Asistente más cuidado ---------- */
+.chat-vacio h3 { font-size: 26px; letter-spacing: -0.01em; background: linear-gradient(180deg, #fff 30%, rgba(255, 255, 255, 0.62)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.subtitulo-vacio { margin: -6px auto 18px; max-width: 520px; text-align: center; }
+.chat-vacio .sugerencias { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 760px; }
+.sugerencia { display: grid; gap: 3px; align-content: start; }
+.sugerencia .ic-sug { color: var(--acento); margin-bottom: 6px; transition: transform 0.2s; }
+.sugerencia:hover .ic-sug { transform: translateY(-2px) scale(1.08); }
+@media (max-width: 900px) { .chat-vacio .sugerencias { grid-template-columns: 1fr 1fr; } }
+.chat-vacio { max-width: 780px; }

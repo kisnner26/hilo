@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type TarjetaVista } from '../lib/api';
-import { alPreguntarAlAgente, type PedidoAgente } from '../lib/agente';
+import { alPedirDictado, alPreguntarAlAgente, irASeccion, type PedidoAgente } from '../lib/agente';
+import { MENSAJE_ERROR, useDictado } from '../lib/useDictado';
 import { mdAHtml } from '../lib/markdown';
 
 type Mensaje =
   | { id: number; de: 'yo'; texto: string }
-  | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number; tokens?: number; local?: boolean };
+  | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number; tokens?: number; local?: boolean; accion?: 'piloto' };
 
-const SUGERENCIAS: { t: string; sub: string }[] = [
-  { t: '¿Qué tarea tengo?', sub: 'Tus tareas de ClickUp' },
-  { t: '¿Qué hago hoy?', sub: 'Lo más urgente primero' },
-  { t: '¿Cuáles son mis PR?', sub: 'Estado y revisión' },
-  { t: 'Explícame cómo está organizado el proyecto', sub: 'Un mapa rápido' },
+const SUGERENCIAS: { t: string; sub: string; icono: string }[] = [
+  { t: '¿Qué tarea tengo?', sub: 'Tus tareas de ClickUp', icono: 'M5 6h14M5 12h14M5 18h9' },
+  { t: '¿Qué hago hoy?', sub: 'Lo más urgente primero', icono: 'M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 100 8 4 4 0 000-8z' },
+  { t: '¿Quién me bloquea?', sub: 'Y cómo destrabarlo', icono: 'M7 11V8a5 5 0 0110 0v3M6 11h12v9H6z' },
+  { t: 'Hazme mis pendientes', sub: 'El piloto automático', icono: 'M13 3L5 14h6l-1 7 8-11h-6z' },
+  { t: '¿Cuáles son mis PR?', sub: 'Estado y revisión', icono: 'M6 6v12M18 9v4a4 4 0 01-4 4h-3M6 6a2 2 0 100-.01M18 9a2 2 0 100-.01' },
+  { t: 'Explícame cómo está organizado el proyecto', sub: 'Un mapa rápido', icono: 'M6 7a2 2 0 100-.01M18 6a2 2 0 100-.01M12 17a2 2 0 100-.01M8 8l3 7M16 8l-3 7' },
 ];
 const ROTULO: Record<string, string> = { entender: 'Entenderla', hacer: 'Hacerla', revisar: 'Revisarla', bloqueo: 'Escribir el bloqueo' };
 const PEDIDO: Record<string, string> = { entender: 'Entender', hacer: 'Hacer', revisar: 'Revisar', bloqueo: 'Escribir el bloqueo de' };
@@ -26,6 +29,40 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   const [ocupado, setOcupado] = useState(false);
   const [conv, setConv] = useState(() => `c${Date.now()}`);
   const fin = useRef<HTMLDivElement>(null);
+  const [autoEnvio, setAutoEnvio] = useState(() => {
+    try {
+      return localStorage.getItem('hilo.dictado-auto') !== 'no';
+    } catch {
+      return true;
+    }
+  });
+  const base = useRef('');
+  const autoRef = useRef(autoEnvio);
+  autoRef.current = autoEnvio;
+  const preguntarRef = useRef<(t: string) => void>(() => undefined);
+  const dictado = useDictado((t, final) => {
+    const junto = `${base.current}${base.current && t ? ' ' : ''}${t}`.trim();
+    setTexto(junto);
+    if (final && junto && autoRef.current) {
+      base.current = '';
+      preguntarRef.current(junto);
+    }
+  });
+  const alternarMic = () => {
+    if (dictado.fase === 'inactivo') base.current = texto.trim();
+    dictado.alternar();
+  };
+  const alternarMicRef = useRef(alternarMic);
+  alternarMicRef.current = alternarMic;
+  useEffect(() => alPedirDictado(() => alternarMicRef.current()), []);
+  const cambiarAuto = (v: boolean) => {
+    setAutoEnvio(v);
+    try {
+      localStorage.setItem('hilo.dictado-auto', v ? 'si' : 'no');
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
   const abierta = useRef(conv);
   abierta.current = conv;
 
@@ -37,7 +74,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           const resto = ms.slice(0, -1);
           const ultimo = ms[ms.length - 1];
           if (!ultimo || ultimo.de !== 'asistente') return ms;
-          if (e.tipo === 'respuesta') return [...resto, { ...ultimo, texto: e.texto ?? '', tarjetas: e.tarjetas, pregunta: e.pregunta, escribiendo: false, local: true }];
+          if (e.tipo === 'respuesta') return [...resto, { ...ultimo, texto: e.texto ?? '', tarjetas: e.tarjetas, pregunta: e.pregunta, escribiendo: false, local: true, ...(e.accion ? { accion: e.accion } : {}) }];
           if (e.tipo === 'inicio') return [...resto, { ...ultimo, modelo: e.modelo }];
           if (e.tipo === 'delta') return [...resto, { ...ultimo, texto: ultimo.texto + (e.texto ?? '') }];
           if (e.tipo === 'fin') return [...resto, { ...ultimo, texto: e.texto || ultimo.texto, escribiendo: false, ms: e.ms, ...(e.tokens ? { tokens: e.tokens } : {}) }];
@@ -69,6 +106,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
     setTexto('');
     enviar(limpio, { texto: limpio });
   };
+  preguntarRef.current = preguntar;
   const pendiente = useRef<PedidoAgente | null>(null);
   const lanzar = (p: PedidoAgente) => {
     if (p.tarea) enviar(p.mostrar, { tarea: p.tarea });
@@ -138,10 +176,14 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
       <div className="chat-mensajes">
         {mensajes.length === 0 && (
           <div className="chat-vacio">
-            <h3>¿En qué te ayudo?</h3>
+            <h3>{saludo ? `Hola, ${saludo}` : 'Hola'}. ¿En qué te ayudo?</h3>
+            <p className="suave subtitulo-vacio">Escribe o toca el micrófono y habla. Lo que Hilo ya sabe de ti lo responde sin gastar tokens.</p>
             <div className="sugerencias">
               {SUGERENCIAS.map((x) => (
                 <button key={x.t} className="sugerencia" onClick={() => preguntar(x.t)}>
+                  <svg className="ic-sug" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={x.icono} />
+                  </svg>
                   <b>{x.t}</b>
                   <span>{x.sub}</span>
                 </button>
@@ -177,6 +219,19 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
                 </div>
               )}
               {m.pregunta && <p className="pregunta-chat">{m.pregunta}</p>}
+              {m.accion === 'piloto' && (
+                <div className="fila">
+                  <button
+                    className="boton"
+                    onClick={() => {
+                      void api.autoCorrer().then(() => irASeccion('inicio')).catch(() => irASeccion('inicio'));
+                    }}
+                  >
+                    Hacer mis pendientes
+                  </button>
+                  <span className="suave">Verás el avance en Mi día.</span>
+                </div>
+              )}
               {!m.escribiendo && m.texto && (
                 <div className="pie-burbuja">
                   <button className="enlace" onClick={() => void api.copiar(m.texto)}>
@@ -193,6 +248,33 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
         <div ref={fin} />
       </div>
 
+      {(dictado.fase !== 'inactivo' || dictado.error || (dictado.plataforma !== 'darwin' && dictado.plataforma !== '')) && (
+        <div className={`estado-voz${dictado.error ? ' con-error' : ''}`}>
+          {dictado.error ? (
+            <>
+              <span>{MENSAJE_ERROR[dictado.error] ?? 'No se pudo dictar.'}</span>
+              {(dictado.error === 'permiso-microfono' || dictado.error === 'permiso-voz') && (
+                <button className="enlace" onClick={() => void api.dictadoPermisos(dictado.error === 'permiso-voz' ? 'voz' : 'microfono')}>
+                  Abrir los permisos del sistema
+                </button>
+              )}
+              <button className="enlace" onClick={dictado.limpiarError}>
+                Cerrar
+              </button>
+            </>
+          ) : dictado.fase !== 'inactivo' ? (
+            <>
+              <span className="punto-voz" aria-hidden="true" />
+              <span>{dictado.fase === 'iniciando' ? 'Preparando el micrófono…' : dictado.fase === 'cerrando' ? 'Terminando…' : autoEnvio ? 'Te escucho. Cuando hagas una pausa larga, envío tu pregunta.' : 'Te escucho. Toca el micrófono para terminar.'}</span>
+              <label className="auto-voz">
+                <input type="checkbox" checked={autoEnvio} onChange={(e) => cambiarAuto(e.target.checked)} /> Enviar al terminar
+              </label>
+            </>
+          ) : (
+            <span>Para dictar en este sistema usa el dictado del propio sistema{dictado.plataforma === 'win32' ? ' (Win+H)' : ''} sobre el cuadro de texto.</span>
+          )}
+        </div>
+      )}
       <form
         className="compositor"
         onSubmit={(e) => {
@@ -203,7 +285,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
         <textarea
           value={texto}
           rows={1}
-          placeholder="Pregunta lo que quieras…"
+          placeholder={dictado.fase === 'escuchando' ? 'Habla, te estoy escuchando…' : 'Pregunta lo que quieras o toca el micrófono…'}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -212,6 +294,26 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
             }
           }}
         />
+        {dictado.plataforma !== '' && (
+          <button
+            type="button"
+            className={`microfono${dictado.fase !== 'inactivo' ? ' activo' : ''}`}
+            onClick={alternarMic}
+            disabled={!dictado.disponible && dictado.plataforma === 'darwin'}
+            title={dictado.fase !== 'inactivo' ? 'Terminar de dictar' : dictado.disponible ? 'Dictar con la voz' : dictado.plataforma === 'win32' ? 'Usa el dictado de Windows: Win+H' : 'El dictado por voz está en la versión de Mac'}
+            aria-label="Dictar con la voz"
+            aria-pressed={dictado.fase !== 'inactivo'}
+          >
+            {dictado.fase === 'escuchando' ? (
+              <span className="ondas" aria-hidden="true"><i /><i /><i /><i /></span>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" />
+                <path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" />
+              </svg>
+            )}
+          </button>
+        )}
         <button className="enviar" type="submit" disabled={ocupado || !texto.trim()} aria-label="Enviar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 19V5M5 12l7-7 7 7" />

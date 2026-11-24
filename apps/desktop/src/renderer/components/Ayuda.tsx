@@ -22,6 +22,7 @@ const CMD = MAC ? '⌘' : 'Ctrl';
 
 const ATAJOS: [string, string][] = [
   [`${CMD} K`, 'Preguntarle al agente desde cualquier pantalla'],
+  [`${CMD} ⇧ M`, 'Dictar con la voz: empieza o termina de escuchar'],
   [`${CMD} B`, 'Ocultar o mostrar la navegación'],
   ['F', 'En el grafo, enfocar lo elegido'],
   ['Esc', 'Cerrar paneles y menús'],
@@ -37,6 +38,7 @@ const GLOSARIO: [string, string][] = [
   ['Ahorro de tokens', 'Un token es un trocito de texto que el agente lee o escribe, y gastarlos cuesta cuota de tu suscripción. Hilo manda solo lo necesario y te muestra cuánto evitó.'],
   ['Contexto', 'Lo que el agente sabe en cada pregunta. Más contexto no siempre es mejor: cuesta más y a veces confunde.'],
   ['Paquete a la medida', 'Nodos del grafo que tú fijas para armar un contexto justo, y copiarlo a tu propia terminal.'],
+  ['Dictado', 'Habla en vez de escribir: el texto aparece mientras hablas y, si lo dejas, se envía solo cuando haces una pausa larga. En Mac usa el reconocimiento de voz del sistema.'],
   ['Rol', 'Documentador, desarrollador, tester o integrador. Decide qué ves y qué acciones te sugiere Hilo.'],
 ];
 

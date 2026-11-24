@@ -135,6 +135,7 @@ export interface EventoChat {
   texto?: string;
   tarjetas?: TarjetaVista[];
   pregunta?: string;
+  accion?: 'piloto';
   modelo?: string;
   ms?: number;
   /** Tokens de entrada y salida que informó el agente al terminar. */
@@ -270,9 +271,32 @@ export interface UsoVista {
   ultimos: { fecha: string; paso: string; ref: string; modelo: string; local: boolean; tokens: number; costoUsd: number }[];
 }
 
+export interface EventoDictado {
+  tipo: 'parcial' | 'final' | 'estado' | 'error' | 'cerrado';
+  texto?: string;
+  estado?: string;
+  codigo?: string;
+}
+export interface EstadoDictado {
+  disponible: boolean;
+  plataforma: string;
+  escuchando: boolean;
+}
+
+/** En la demostración (navegador) se simula el dictado para poder ver cómo se siente. */
+const oyentesDictado = new Set<(e: EventoDictado) => void>();
+let guionDemo: ReturnType<typeof setTimeout>[] = [];
+const emitirDemo = (e: EventoDictado) => oyentesDictado.forEach((f) => f(e));
+function dictadoDemo() {
+  const frases = ['¿qué', '¿qué tarea', '¿qué tarea tengo', '¿qué tarea tengo hoy?'];
+  emitirDemo({ tipo: 'estado', estado: 'escuchando' });
+  guionDemo = frases.map((t, i) => setTimeout(() => emitirDemo({ tipo: 'parcial', texto: t }), 700 + i * 650));
+  guionDemo.push(setTimeout(() => { emitirDemo({ tipo: 'final', texto: frases[3]! }); emitirDemo({ tipo: 'cerrado' }); }, 700 + frases.length * 650 + 1500));
+}
+
 declare global {
   interface Window {
-    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void };
+    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void; alDictado: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -387,6 +411,25 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
+  dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ disponible: true, plataforma: 'darwin', escuchando: false })),
+  dictadoIniciar: (idioma: string): Promise<void> => {
+    if (enElectron) return inv('dictado:iniciar', idioma);
+    dictadoDemo();
+    return Promise.resolve();
+  },
+  dictadoDetener: (): Promise<void> => {
+    if (enElectron) return inv('dictado:detener');
+    guionDemo.forEach(clearTimeout);
+    emitirDemo({ tipo: 'final', texto: '¿qué tarea tengo hoy?' });
+    emitirDemo({ tipo: 'cerrado' });
+    return Promise.resolve();
+  },
+  dictadoPermisos: (cual: 'microfono' | 'voz'): Promise<void> => (enElectron ? inv('dictado:permisos', cual) : Promise.resolve()),
+  alDictado: (cb: (e: EventoDictado) => void): (() => void) => {
+    if (enElectron) return window.hilo!.alDictado((e) => cb(e as EventoDictado));
+    oyentesDictado.add(cb);
+    return () => oyentesDictado.delete(cb);
+  },
   autoPlan: (): Promise<PlanAutoVista> => (enElectron ? inv('auto:plan') : Promise.resolve(PLAN_DEMO)),
   autoBandeja: (): Promise<ItemBandejaVista[]> => (enElectron ? inv('auto:bandeja') : Promise.resolve(BANDEJA_DEMO)),
   autoCorrer: (ids?: string[]): Promise<{ corrida: string; pasos: number }> => (enElectron ? inv('auto:correr', ids) : Promise.resolve({ corrida: 'demo', pasos: PLAN_DEMO.pasos.length })),

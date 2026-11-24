@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
 import { registrarAutopiloto, registrarUso } from './autopiloto';
+import { registrarDictado } from './dictado';
 
 type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola' | 'autopiloto';
 interface Programada {
@@ -373,6 +374,14 @@ const conversaciones = new Map<string, Conversacion>();
 let diaCache: { hasta: number; dia: core.MiDia } | undefined;
 let calculoCache: { hasta: number; r: Awaited<ReturnType<typeof calcularMiDia>> } | undefined;
 
+async function calculoCacheado(): Promise<Awaited<ReturnType<typeof calcularMiDia>>> {
+  if (calculoCache && calculoCache.hasta > Date.now()) return calculoCache.r;
+  const r = await calcularMiDia();
+  calculoCache = { hasta: Date.now() + 60_000, r };
+  diaCache = { hasta: Date.now() + 90_000, dia: r.dia };
+  return r;
+}
+
 async function diaCacheado(forzar = false): Promise<core.MiDia> {
   if (!forzar && diaCache && diaCache.hasta > Date.now()) return diaCache.dia;
   const { dia } = await calcularMiDia();
@@ -399,7 +408,13 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
     if (!p.tarea && p.texto && ah.respuestasInmediatas) {
       const intencion = core.detectarIntencion(p.texto);
       if (intencion) {
-        emitir({ tipo: 'respuesta', ...core.respuestaDeIntencion(intencion, dia) });
+        let extra: core.DatosExtra = {};
+        if (intencion === 'quien-bloquea' || intencion === 'piloto') {
+          const { bruto } = await calculoCacheado();
+          const bloqueos = core.analizarBloqueos(bruto.tareas, bruto.prs, bruto.yo, perfil);
+          extra = { bloqueos, pasosPiloto: core.planAutopiloto(dia, bloqueos, perfil).length };
+        }
+        emitir({ tipo: 'respuesta', ...core.respuestaDeIntencion(intencion, dia, extra) });
         return;
       }
     }
@@ -885,6 +900,7 @@ void app.whenReady().then(() => {
   registrarIpc();
   registrarIpcExtra();
   registrarIpcConexiones();
+  registrarDictado(enviar);
   const auto = registrarAutopiloto({
     config: () => leerConfig(),
     perfil: perfilActual,
