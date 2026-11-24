@@ -52,6 +52,10 @@ const CANALES = [
   'auto:correr',
   'auto:publicar',
   'uso:resumen',
+  'dictado:estado',
+  'dictado:iniciar',
+  'dictado:detener',
+  'dictado:permisos',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
@@ -74,6 +78,11 @@ contextBridge.exposeInMainWorld('hilo', {
     const f = (_: unknown, e: unknown) => cb(e);
     ipcRenderer.on('auto:evento', f);
     return () => ipcRenderer.off('auto:evento', f);
+  },
+  alDictado: (cb: (e: unknown) => void) => {
+    const f = (_: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('dictado:evento', f);
+    return () => ipcRenderer.off('dictado:evento', f);
   },
   alCodigo: (cb: (e: unknown) => void) => {
     const f = (_: unknown, e: unknown) => cb(e);

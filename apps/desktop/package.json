@@ -12,7 +12,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder --publish never",
+    "dictado": "sh scripts/compilar-dictado.sh",
+    "dist": "electron-vite build && sh scripts/compilar-dictado.sh && electron-builder --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -43,7 +44,17 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Hilo usa el micrófono solo cuando tocas el botón de dictado, para escribir lo que dices.",
+        "NSSpeechRecognitionUsageDescription": "Hilo usa el reconocimiento de voz del sistema para convertir lo que dictas en texto."
+      },
+      "extraResources": [
+        {
+          "from": "native/bin",
+          "to": "native"
+        }
+      ]
     },
     "win": {
       "target": [
