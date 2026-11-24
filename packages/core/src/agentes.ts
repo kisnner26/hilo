@@ -41,6 +41,15 @@ export interface EjecucionSpec {
   sinSesion?: boolean;
   /** Para cancelar el paso en curso. */
   senal?: AbortSignal;
+  /**
+   * Recorta lo que Claude Code carga por defecto en cada turno: servidores MCP, comandos, herramientas que no se usan
+   * y los ajustes personales. Medido: el contexto de una consulta baja de ~69.000 a ~10.000 tokens.
+   */
+  ligero?: boolean;
+  /** Carpetas extra que el agente puede leer (por ejemplo, la de los adjuntos). */
+  carpetas?: string[];
+  /** Imágenes para Codex (`-i`); Claude Code las lee por ruta con su herramienta Read. */
+  imagenes?: string[];
   /** Conversación continuada: la primera vez crea la sesión y las siguientes la reanudan, sin reenviar el historial. */
   sesion?: { id: string; reanudar: boolean };
   /** Recibe el texto mientras se escribe. */
@@ -52,7 +61,11 @@ export const HERRAMIENTAS_ESCRITURA = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 
 /** Lo que jamás puede hacer sin una persona: publicar, borrar o salir a la red. */
 export const HERRAMIENTAS_PROHIBIDAS = ['Bash(git push:*)', 'Bash(git reset:*)', 'Bash(git clean:*)', 'Bash(git checkout:*)', 'Bash(rm:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(gh:*)', 'Bash(sudo:*)'];
 
+export const HERRAMIENTAS_LECTURA = ['Read', 'Glob', 'Grep'];
+export const HERRAMIENTAS_BASE_ESCRITURA = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'];
+
 export function argumentosClaude(s: EjecucionSpec): string[] {
+  const lectura = !s.escritura || Boolean(s.soloLectura);
   return [
     '-p',
     '--model',
@@ -62,7 +75,10 @@ export function argumentosClaude(s: EjecucionSpec): string[] {
     '--output-format',
     'stream-json',
     '--verbose',
-    ...(s.sistema ? ['--append-system-prompt', s.sistema] : []),
+    // En lectura y con el modo ligero, el prompt propio reemplaza al de Claude Code (varios miles de tokens que no hacen falta).
+    ...(s.sistema ? [s.ligero && lectura ? '--system-prompt' : '--append-system-prompt', s.sistema] : []),
+    ...(s.ligero ? ['--strict-mcp-config', '--disable-slash-commands', '--setting-sources', 'project', '--tools', (lectura ? HERRAMIENTAS_LECTURA : HERRAMIENTAS_BASE_ESCRITURA).join(',')] : []),
+    ...(s.carpetas?.length ? ['--add-dir', ...s.carpetas] : []),
     ...(s.soloLectura ? ['--permission-mode', 'plan'] : []),
     ...(!s.soloLectura && s.escritura ? ['--permission-mode', 'acceptEdits', '--allowedTools', ...HERRAMIENTAS_ESCRITURA, '--disallowedTools', ...HERRAMIENTAS_PROHIBIDAS] : []),
     ...(s.presupuestoUsd ? ['--max-budget-usd', String(s.presupuestoUsd)] : []),
@@ -81,6 +97,7 @@ export function argumentosCodex(s: EjecucionSpec): string[] {
     '-c',
     `model_reasoning_effort="${esfuerzoCodex(s.asignado.esfuerzo)}"`,
     ...(s.soloLectura ? ['--sandbox', 'read-only'] : s.escritura ? ['--sandbox', 'workspace-write'] : []),
+    ...(s.imagenes ?? []).flatMap((i) => ['-i', i]),
     '-',
   ];
 }

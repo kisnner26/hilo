@@ -17,6 +17,8 @@ export interface AjustesAhorro {
   sesionContinua: boolean;
   /** Responder con datos locales las preguntas simples, sin gastar tokens. */
   respuestasInmediatas: boolean;
+  /** Pedirle a Claude Code solo lo que se usa: sin servidores MCP, comandos ni herramientas de más. */
+  contextoMinimo: boolean;
   /** Redactar con un modelo ligero y editar código con el de desarrollo. */
   modeloEscalonado: boolean;
   /** No volver a pagar un paso idéntico sobre el mismo commit. */
@@ -40,6 +42,7 @@ const BASE: AjustesAhorro = {
   comprimirLogs: true,
   sesionContinua: true,
   respuestasInmediatas: true,
+  contextoMinimo: true,
   modeloEscalonado: true,
   cachePasos: true,
   topeUsdPaso: 1.5,
@@ -51,7 +54,7 @@ const BASE: AjustesAhorro = {
 
 export function presetAhorro(p: PresetAhorro): AjustesAhorro {
   if (p === 'maximo') return { ...BASE, presupuesto: 800, topeUsdPaso: 0.8, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 };
-  if (p === 'libre') return { ...BASE, activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, modeloEscalonado: false, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 };
+  if (p === 'libre') return { ...BASE, activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, contextoMinimo: false, modeloEscalonado: false, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 };
   return { ...BASE };
 }
 
@@ -74,6 +77,7 @@ export const TECNICAS_AHORRO: { clave: keyof AjustesAhorro; nombre: string; deta
   { clave: 'estiloBreve', nombre: 'Respuestas breves', detalle: 'Sin preámbulos en código y pruebas.' },
   { clave: 'comprimirLogs', nombre: 'Logs y diffs comprimidos', detalle: 'Quita ruido antes de enviar.' },
   { clave: 'sesionContinua', nombre: 'Conversación continuada', detalle: 'No reenvía el historial. Apagado, cada pregunta empieza de cero.' },
+  { clave: 'contextoMinimo', nombre: 'Contexto mínimo del agente', detalle: 'Sin servidores MCP ni herramientas de más: ~10 mil tokens por consulta en vez de ~69 mil.' },
   { clave: 'modeloEscalonado', nombre: 'Modelo según el paso', detalle: 'Redactar usa uno ligero; editar código, el de desarrollo.' },
   { clave: 'cachePasos', nombre: 'No pagar dos veces', detalle: 'Un paso idéntico sobre el mismo commit reutiliza su respuesta.' },
   { clave: 'respuestasInmediatas', nombre: 'Respuestas locales', detalle: '«¿Qué tarea tengo?» se responde sin modelo.' },

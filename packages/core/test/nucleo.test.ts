@@ -253,3 +253,29 @@ describe('agente de escritura', () => {
     expect(argumentosCodex({ asignado: { cli: 'codex', modelo: 'gpt-5', esfuerzo: 'low' }, prompt: 'x', cwd: '.', escritura: true })).toEqual(expect.arrayContaining(['--sandbox', 'workspace-write']));
   });
 });
+
+describe('modo ligero del agente', () => {
+  const base = { asignado: { cli: 'claude' as const, modelo: 'claude-sonnet-5-5', esfuerzo: 'low' as const }, prompt: 'x', cwd: '.', sistema: 'rol' };
+  it('en lectura recorta MCP, comandos, herramientas y ajustes, y usa su propio prompt de sistema', () => {
+    const a = argumentosClaude({ ...base, soloLectura: true, ligero: true });
+    expect(a).toEqual(expect.arrayContaining(['--strict-mcp-config', '--disable-slash-commands', '--setting-sources', 'project', '--tools', 'Read,Glob,Grep', '--system-prompt']));
+    expect(a).not.toContain('--append-system-prompt');
+  });
+  it('en escritura conserva el prompt de Claude Code y las herramientas para editar y probar', () => {
+    const a = argumentosClaude({ ...base, escritura: true, ligero: true });
+    expect(a).toContain('--append-system-prompt');
+    expect(a).not.toContain('--system-prompt');
+    expect(a[a.indexOf('--tools') + 1]).toBe('Read,Edit,Write,Glob,Grep,Bash');
+  });
+  it('sin modo ligero no cambia nada de lo anterior', () => {
+    const a = argumentosClaude({ ...base, soloLectura: true });
+    expect(a).not.toContain('--strict-mcp-config');
+    expect(a).toContain('--append-system-prompt');
+  });
+  it('permite leer carpetas extra y pasa las imágenes a Codex', () => {
+    expect(argumentosClaude({ ...base, soloLectura: true, carpetas: ['/tmp/adj'] })).toEqual(expect.arrayContaining(['--add-dir', '/tmp/adj']));
+    const c = argumentosCodex({ asignado: { cli: 'codex', modelo: '', esfuerzo: 'low' }, prompt: 'x', cwd: '.', imagenes: ['/a.png', '/b.png'] });
+    expect(c).toEqual(expect.arrayContaining(['-i', '/a.png', '/b.png']));
+    expect(c[c.length - 1]).toBe('-');
+  });
+});
