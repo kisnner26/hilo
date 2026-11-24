@@ -222,6 +222,12 @@ export class GitHubApi {
     return { numero: r.number, url: r.html_url };
   }
 
+  /** Nombres de los archivos de una carpeta del repositorio (por ejemplo, las migraciones ya fusionadas en main). */
+  async nombresEnCarpeta(repo: string, ruta: string, ref = 'main'): Promise<string[]> {
+    const r = await this.pedir<{ name: string; type: string }[]>(`/repos/${repo}/contents/${ruta}?ref=${encodeURIComponent(ref)}`);
+    return r.filter((x) => x.type === 'file').map((x) => x.name);
+  }
+
   async releases(repo: string): Promise<{ tag: string; publicado: string; activos: { nombre: string; descargas: number }[] }[]> {
     const r = await this.pedir<{ tag_name: string; published_at: string; assets: { name: string; download_count: number }[] }[]>(`/repos/${repo}/releases?per_page=30`);
     return r.map((x) => ({ tag: x.tag_name, publicado: x.published_at, activos: x.assets.map((a) => ({ nombre: a.name, descargas: a.download_count })) }));
