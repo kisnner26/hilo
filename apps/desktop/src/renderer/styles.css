@@ -786,3 +786,16 @@ html:not(.cristal) body, body { background: radial-gradient(1000px 640px at 14% 
 .notas-version { max-height: 220px; overflow: auto; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); font-size: 12.5px; }
 .bar-actualizar { height: 34px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.16); color: #fff; font-size: 12px; font-weight: 650; white-space: nowrap; -webkit-app-region: no-drag; }
 .bar-actualizar:hover { background: rgba(167, 139, 250, 0.3); }
+.resultado-act { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--linea); background: rgba(255, 255, 255, 0.04); animation: destello-act 0.6s ease; }
+.resultado-act > div { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.resultado-act:empty { display: none; }
+.resultado-act .icono-act { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); font-weight: 800; }
+.resultado-act.ok { border-color: rgba(61, 255, 136, 0.5); background: rgba(61, 255, 136, 0.07); }
+.resultado-act.ok .icono-act { background: var(--verde); color: #04120a; }
+.resultado-act.nueva { border-color: rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.1); }
+.resultado-act.nueva .icono-act { background: var(--acento); color: #0b0b0e; }
+.resultado-act.mal { border-color: rgba(255, 107, 107, 0.55); background: rgba(255, 107, 107, 0.08); }
+.resultado-act.mal .icono-act { background: var(--error); color: #1a0505; }
+.giro { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: gira 0.8s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@keyframes destello-act { from { transform: scale(0.985); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }

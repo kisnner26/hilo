@@ -13,16 +13,24 @@ export function Actualizaciones() {
   const [error, setError] = useState('');
   const [ev, setEv] = useState<EventoActualizar | null>(null);
   const [reviso, setReviso] = useState(false);
+  const [hora, setHora] = useState('');
+  const [destello, setDestello] = useState(0);
 
   const comprobar = async () => {
     setBuscando(true);
     setError('');
+    const t0 = Date.now();
     try {
-      setU(await api.comprobarActualizacion());
+      const r = await api.comprobarActualizacion();
+      // Aunque GitHub conteste al instante, se deja ver «Buscando…» un momento: así se nota que hizo algo.
+      await new Promise((ok) => setTimeout(ok, Math.max(0, 900 - (Date.now() - t0))));
+      setU(r);
       setReviso(true);
     } catch (e) {
       setError(limpio(e));
     } finally {
+      setHora(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setDestello((x) => x + 1);
       setBuscando(false);
     }
   };
@@ -57,13 +65,31 @@ export function Actualizaciones() {
         <div className="fila-interruptor">
           <div>
             <b>Hilo {v?.version ?? '…'}</b>
-            <span className="suave">
-              {buscando ? 'Buscando versiones nuevas…' : u?.hay ? `Hay una versión nueva: ${u.ultima}` : reviso ? 'Tienes la versión más nueva.' : ' '}
-            </span>
+            <span className="suave">Versión instalada</span>
           </div>
           <button className="boton secundario" onClick={() => void comprobar()} disabled={buscando || ocupado}>
             {buscando ? 'Buscando…' : 'Comprobar actualizaciones'}
           </button>
+        </div>
+
+        <div key={destello} className={`resultado-act ${buscando ? 'buscando' : error ? 'mal' : u?.hay ? 'nueva' : reviso ? 'ok' : ''}`} role="status" aria-live="polite">
+          <span className="icono-act" aria-hidden="true">
+            {buscando ? <i className="giro" /> : error ? '!' : u?.hay ? '↑' : reviso ? '✓' : ''}
+          </span>
+          <div>
+            <b>
+              {buscando
+                ? 'Buscando versiones nuevas en GitHub…'
+                : error
+                  ? 'No pude comprobar las actualizaciones'
+                  : u?.hay
+                    ? `Hay una versión nueva: ${u.ultima}`
+                    : reviso
+                      ? `Estás al día: la ${v?.version ?? u?.actual ?? ''} es la más nueva`
+                      : 'Todavía no se ha comprobado'}
+            </b>
+            {!buscando && hora && <span className="suave">{error ? error : `Comprobado a las ${hora}`}</span>}
+          </div>
         </div>
 
         {u?.hay && (
@@ -96,7 +122,6 @@ export function Actualizaciones() {
             </p>
           </div>
         )}
-        {error && <p className="mal">{error}</p>}
       </section>
 
       <section className="conexion">
