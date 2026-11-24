@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { UsoReal } from './Uso';
 import { api, type AhorroVista, type Conexion, type Config, type EstadoSesion, type Funcion, type InstalacionesVista, type ModeloAsignado, type PerfilVista, type ProgramadaVista, type Prueba } from '../lib/api';
 import { Conexiones } from './Conexiones';
 
@@ -208,9 +209,9 @@ function TabModelos({ perfil, alCambiar }: { perfil: PerfilVista | null; alCambi
 // ---------- Ahorro de tokens ----------
 
 const PRESETS: Record<'maximo' | 'equilibrado' | 'libre', AhorroVista> = {
-  maximo: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, presupuesto: 800, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 },
-  equilibrado: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, presupuesto: 1500, maxSubagentes: 5, maxLineasDiff: 300, maxCaracteresNota: 1000 },
-  libre: { activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, sesionContinua: true, respuestasInmediatas: true, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 },
+  maximo: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 0.8, presupuesto: 800, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 },
+  equilibrado: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 1.5, presupuesto: 1500, maxSubagentes: 5, maxLineasDiff: 300, maxCaracteresNota: 1000 },
+  libre: { activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: false, cachePasos: true, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 },
 };
 const TECNICAS: { clave: keyof AhorroVista; nombre: string; detalle: string }[] = [
   { clave: 'resumen', nombre: 'Resumen del proyecto', detalle: 'Un mapa corto en vez de listar todo' },
@@ -219,6 +220,8 @@ const TECNICAS: { clave: keyof AhorroVista; nombre: string; detalle: string }[] 
   { clave: 'estiloBreve', nombre: 'Respuestas breves', detalle: 'Sin preámbulos en código y pruebas' },
   { clave: 'comprimirLogs', nombre: 'Logs y diffs comprimidos', detalle: 'Quita ruido antes de enviar' },
   { clave: 'sesionContinua', nombre: 'Conversación continuada', detalle: 'No reenvía el historial' },
+  { clave: 'modeloEscalonado', nombre: 'Modelo según el paso', detalle: 'Redactar con uno ligero, editar código con el de desarrollo' },
+  { clave: 'cachePasos', nombre: 'No pagar dos veces', detalle: 'Un paso idéntico sobre el mismo commit reutiliza su respuesta' },
   { clave: 'respuestasInmediatas', nombre: 'Respuestas locales', detalle: '«¿Qué tarea tengo?» sin modelo' },
 ];
 const TOPES: { clave: keyof AhorroVista; nombre: string; min: number; max: number; paso: number; unidad: string }[] = [
@@ -226,6 +229,7 @@ const TOPES: { clave: keyof AhorroVista; nombre: string; min: number; max: numbe
   { clave: 'maxSubagentes', nombre: 'Subagentes por orquestación', min: 1, max: 8, paso: 1, unidad: '' },
   { clave: 'maxLineasDiff', nombre: 'Líneas de diff', min: 100, max: 1000, paso: 50, unidad: 'líneas' },
   { clave: 'maxCaracteresNota', nombre: 'Texto por nota', min: 300, max: 4000, paso: 100, unidad: 'caracteres' },
+  { clave: 'topeUsdPaso', nombre: 'Gasto máximo por paso del autopiloto', min: 0.2, max: 8, paso: 0.2, unidad: 'USD' },
 ];
 
 function TabAhorro() {
@@ -241,6 +245,7 @@ function TabAhorro() {
   if (!cargado) return null;
   return (
     <div className="pestana">
+      <UsoReal />
       <section className="conexion destacada">
         <div className="fila-interruptor">
           <div>
@@ -281,7 +286,7 @@ function TabAhorro() {
               <b>{t.nombre}</b>
               <span className="suave">{t.detalle}</span>
             </div>
-            <Interruptor etiqueta={t.nombre} valor={Boolean(a[t.clave])} deshabilitado={!a.activo && t.clave !== 'sesionContinua' && t.clave !== 'respuestasInmediatas'} alCambiar={(v) => guardar({ ...a, [t.clave]: v })} />
+            <Interruptor etiqueta={t.nombre} valor={Boolean(a[t.clave])} deshabilitado={!a.activo && t.clave !== 'sesionContinua' && t.clave !== 'respuestasInmediatas' && t.clave !== 'cachePasos'} alCambiar={(v) => guardar({ ...a, [t.clave]: v })} />
           </div>
         ))}
       </section>
@@ -311,6 +316,7 @@ const META: Record<ProgramadaVista['id'], { nombre: string; detalle: string; mod
   'resumen-dia': { nombre: 'Resumen del día', detalle: 'Tus tareas y PR cada mañana', modo: 'hora' },
   'revisar-prs': { nombre: 'Revisar PR nuevos', detalle: 'Revisa el formato y avisa de los que fallan', modo: 'cada', opciones: [10, 15, 30, 60], soloIntegrador: true },
   'informe-cola': { nombre: 'Informe de la cola', detalle: 'Rondas y carga de revisión', modo: 'hora', soloIntegrador: true },
+  autopiloto: { nombre: 'Preparar el piloto automático', detalle: 'Deja listo, sin gastar tokens, lo que Hilo resuelve solo: ramas al día, avisos y entregas redactadas', modo: 'hora' },
 };
 
 function TabAutomatico() {

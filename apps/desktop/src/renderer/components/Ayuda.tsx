@@ -19,6 +19,7 @@ const hecho = (k: string) => {
 const PREGUNTAS: [string, string][] = [
   ['No veo mis tareas', 'Conecta ClickUp y revisa que sigues la lista de tu sprint, en Ajustes › Cuentas.'],
   ['¿Qué gasta tokens?', 'Solo las preguntas libres y los agentes. Lo demás se responde sin modelo. Ajústalo en Ajustes › Ahorro.'],
+  ['¿Qué hace el piloto automático?', 'Prepara tus pendientes en lote y los deja en una bandeja. Lo que sale a otras personas (comentarios, ramas, PR) solo se publica cuando lo apruebas.'],
   ['¿Es seguro?', 'Tus tokens se guardan cifrados con el llavero del sistema y nada se publica sin que lo confirmes.'],
   ['¿Dónde está Revisar PR?', 'Solo aparece para integradores.'],
 ];

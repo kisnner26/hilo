@@ -15,7 +15,21 @@ app de escritorio para que un equipo entregue completo a la primera. junta el gr
 | la ia gasta tokens releyendo todo (opcional y configurable en ajustes: tres preajustes y cada técnica por separado) | resumen del proyecto (~400 tokens en vez de ~32 mil), vecindad de un nodo, sesión nueva con el hilo, notas recortadas a los párrafos útiles, logs comprimidos, estilo breve en subagentes y medidor de ahorro |
 | la ia pierde el hilo o inventa | el hilo de la tarea se reinyecta en cada turno, y un motor de reglas decide cuándo seguir, preguntar o parar |
 | revisar PR a mano uno por uno | los PR listos se revisan solos; un clic copia o publica la lista de correcciones, y una tarea programada avisa de los nuevos con errores |
+| nadie sabe quién frena a quién | «quién te frena» cruza dependencias de clickup, revisiones, checks y rama atrasada, nombra a la persona y deja el recordatorio escrito |
+| las tareas pendientes se acumulan | el piloto automático convierte tu día en pasos: lo que hilo resuelve solo (rama al día, entrega y bloqueo redactados con el sha real, avisos), lo que redacta un agente ligero y lo que un agente hace en un espacio aislado (arreglar el ci, aplicar una revisión, la primera pieza de una tarea), con las comprobaciones corridas sin modelo |
 | un solo integrador lo carga todo | reparto por carga entre integradores y métrica de rondas por pr |
+
+### piloto automático
+
+un botón, «hacer mis pendientes». hilo ordena los pasos del más barato al más caro, los corre y deja el resultado en una bandeja. **nada llega a otras personas sin tu aprobación**: comentarios, ramas y pr se confirman en un cuadro con el resumen.
+
+- los agentes que editan código corren en una copia aislada (git worktree) y en su propia rama, con herramientas acotadas: leer, editar, probar y guardar commits locales. sin push, sin borrar, sin red.
+- después de editar, hilo corre las comprobaciones del perfil sin pasar por el modelo; solo lo que falla vuelve, comprimido, y se reintenta una vez.
+- la preparación diaria (tarea programada) deja listo, sin gastar tokens, lo que hilo resuelve solo.
+
+### ahorro de tokens, medido
+
+ajustes › ahorro muestra dos cifras por separado: lo **gastado**, que cuenta la propia cli de claude code o codex al terminar cada paso, y lo **evitado**, que compara el texto crudo con el que hilo mandó (caracteres entre 4: es una estimación, no una factura). las técnicas: registros de ci reducidos al fallo, comentarios de revisión compactos con archivo y línea, diffs comprimidos, modelo ligero para redactar y el de desarrollo solo para editar, respuesta reutilizada si el paso es idéntico sobre el mismo commit, tope de gasto por paso y pasos que no usan modelo.
 
 ![revisar pr](docs/img/revisar-pr.png)
 

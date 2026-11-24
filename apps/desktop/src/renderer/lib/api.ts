@@ -81,7 +81,7 @@ export interface RevisionVista {
   comentario: string;
 }
 export interface ProgramadaVista {
-  id: 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola';
+  id: 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola' | 'autopiloto';
   activo: boolean;
   cadaMin?: number;
   hora?: string;
@@ -97,6 +97,9 @@ export interface AhorroVista {
   comprimirLogs: boolean;
   sesionContinua: boolean;
   respuestasInmediatas: boolean;
+  modeloEscalonado: boolean;
+  cachePasos: boolean;
+  topeUsdPaso: number;
   presupuesto: number;
   maxSubagentes: number;
   maxLineasDiff: number;
@@ -196,9 +199,78 @@ export interface InstalacionesVista {
   releases: { tag: string; publicado: string; total: number; activos: { nombre: string; descargas: number }[] }[];
 }
 
+export interface BloqueoVista {
+  tipo: 'dependencia' | 'ci' | 'cambios-pedidos' | 'espera-revision' | 'espera-testing' | 'rama-atrasada' | 'estado-bloqueada';
+  tarea: string;
+  pr?: number;
+  causa: string;
+  quien: string[];
+  tuTurno: boolean;
+  dias: number;
+  automatico?: 'actualizar-rama';
+}
+export interface CulpableVista {
+  quien: string;
+  bloqueos: number;
+  tareas: string[];
+  masAntiguo: number;
+}
+export interface PasoAutoVista {
+  id: string;
+  tipo: string;
+  ref: string;
+  titulo: string;
+  ejecutor: 'hilo' | 'agente';
+  salida: 'ninguna' | 'comentario-github' | 'comentario-clickup' | 'rama-y-pr' | 'push' | 'editar-pr';
+  escritura: boolean;
+  peso: 'ligero' | 'completo';
+  prioridad: number;
+}
+export interface ItemBandejaVista {
+  id: string;
+  corrida: string;
+  paso: PasoAutoVista;
+  estado: 'listo' | 'publicado' | 'descartado' | 'error';
+  texto: string;
+  creado: string;
+  modelo?: string;
+  costoUsd?: number;
+  detalle?: { resumen?: string; rama?: string; verificacion?: string; titulo?: string; pendientesFormato?: number; archivos?: string[] };
+  enlace?: string;
+}
+export interface PlanAutoVista {
+  bloqueos: BloqueoVista[];
+  culpables: CulpableVista[];
+  pasos: PasoAutoVista[];
+  corriendo?: string;
+}
+export interface EventoAuto {
+  corrida: string;
+  tipo: 'inicio' | 'paso' | 'delta' | 'fin';
+  id?: string;
+  estado?: 'corriendo' | 'listo' | 'publicado' | 'error' | 'omitido';
+  texto?: string;
+  total?: number;
+  listos?: number;
+  item?: ItemBandejaVista;
+}
+export interface UsoVista {
+  pasos: number;
+  locales: number;
+  entrada: number;
+  salida: number;
+  cacheLeida: number;
+  costoUsd: number;
+  porTecnica: { tecnica: string; tokens: number; veces: number }[];
+  tokensEvitados: number;
+  tokensSinHilo: number;
+  ahorro: number;
+  ultimos: { fecha: string; paso: string; ref: string; modelo: string; local: boolean; tokens: number; costoUsd: number }[];
+}
+
 declare global {
   interface Window {
-    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void };
+    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -211,6 +283,57 @@ interface GrafoCrudo {
   nodos: { id: string; label: string; tipo?: string; archivo?: string; comunidad?: number; nombreComunidad?: string }[];
   enlaces: EnlaceVista[];
 }
+
+const PASOS_DEMO: PasoAutoVista[] = [
+  { id: 'actualizar-rama:#82', tipo: 'actualizar-rama', ref: '#82', titulo: 'Actualizar la rama del #82', ejecutor: 'hilo', salida: 'ninguna', escritura: false, peso: 'ligero', prioridad: 1 },
+  { id: 'arreglar-ci:#88', tipo: 'arreglar-ci', ref: '#88', titulo: 'Arreglar el CI del #88', ejecutor: 'agente', salida: 'push', escritura: true, peso: 'completo', prioridad: 2 },
+  { id: 'explicar-bloqueo:BFA-FE-01', tipo: 'explicar-bloqueo', ref: 'BFA-FE-01', titulo: 'Explicar el bloqueo de BFA-FE-01', ejecutor: 'hilo', salida: 'comentario-clickup', escritura: false, peso: 'ligero', prioridad: 3 },
+  { id: 'iniciar-tarea:GEN-04-FE', tipo: 'iniciar-tarea', ref: 'GEN-04-FE', titulo: 'Hacer la primera pieza de GEN-04-FE', ejecutor: 'agente', salida: 'rama-y-pr', escritura: true, peso: 'completo', prioridad: 4 },
+  { id: 'entregar:GEN-01-BE', tipo: 'entregar', ref: 'GEN-01-BE', titulo: 'Comentar la entrega de GEN-01-BE', ejecutor: 'hilo', salida: 'comentario-clickup', escritura: false, peso: 'ligero', prioridad: 5 },
+  { id: 'avisar:espera-revision:88', tipo: 'avisar', ref: '#88', titulo: 'Avisar a over2099: El #88 espera su revisión desde hace 3 días', ejecutor: 'hilo', salida: 'comentario-github', escritura: false, peso: 'ligero', prioridad: 7 },
+];
+const PLAN_DEMO: PlanAutoVista = {
+  pasos: PASOS_DEMO,
+  bloqueos: [
+    { tipo: 'espera-revision', tarea: 'GEN-01-BE', pr: 88, causa: 'El #88 espera la revisión de over2099 desde hace 3 días.', quien: ['over2099'], tuTurno: false, dias: 3 },
+    { tipo: 'dependencia', tarea: 'BFA-FE-01', causa: 'Depende de GEN-00-API (in progress).', quien: ['luis-dev'], tuTurno: false, dias: 0 },
+    { tipo: 'dependencia', tarea: 'GEN-04-FE', causa: 'Depende de GEN-04-BE (in review).', quien: ['luis-dev'], tuTurno: false, dias: 0 },
+    { tipo: 'espera-testing', tarea: 'GEN-01-BE', pr: 88, causa: 'Al #88 le falta testing-ok: Testing debe dar conformidad.', quien: ['Testing'], tuTurno: false, dias: 2 },
+    { tipo: 'ci', tarea: 'GEN-03-FE', pr: 91, causa: 'El CI del #91 falló.', quien: [], tuTurno: true, dias: 1 },
+  ],
+  culpables: [
+    { quien: 'luis-dev', bloqueos: 2, tareas: ['BFA-FE-01', 'GEN-04-FE'], masAntiguo: 0 },
+    { quien: 'over2099', bloqueos: 1, tareas: ['GEN-01-BE'], masAntiguo: 3 },
+    { quien: 'Testing', bloqueos: 1, tareas: ['GEN-01-BE'], masAntiguo: 2 },
+  ],
+};
+const BANDEJA_DEMO: ItemBandejaVista[] = [
+  { id: 'b1', corrida: 'c', paso: PASOS_DEMO[2]!, estado: 'listo', creado: new Date().toISOString(), texto: 'Bloqueo BFA-FE-01\n\nCausa: Depende de GEN-00-API (in progress).\nSe desbloquea con: que luis-dev cierre lo pendiente o confirme una fecha.\nDepende de: luis-dev' },
+  { id: 'b2', corrida: 'c', paso: PASOS_DEMO[4]!, estado: 'listo', creado: new Date().toISOString(), texto: 'Entrega GEN-01-BE\n\nEnlace: https://github.com/org/repo/pull/88\nSHA probado: 3da3156\n\nPendiente del equipo (Integración, Testing, Documentación):\n- testing-ok y revisión de Integración' },
+  { id: 'b3', corrida: 'c', paso: PASOS_DEMO[1]!, estado: 'listo', creado: new Date().toISOString(), modelo: 'claude-sonnet-5-5 · low', costoUsd: 0.12, texto: 'Causa: la prueba esperaba el rango cerrado y el servicio devolvía abierto. Cambié el límite superior y agregué el caso del extremo compartido. Pasó mvn spotless:check.', detalle: { resumen: '2 archivo(s), 31 líneas, 1 commit(s)', rama: 'feature/ana-dev-GEN-01-BE', verificacion: 'Pasó: mvn -f backend/pom.xml spotless:check', archivos: ['backend/src/main/java/Servicio.java', 'backend/src/test/java/ServicioTest.java'] } },
+];
+const USO_DEMO: UsoVista = {
+  pasos: 14,
+  locales: 6,
+  entrada: 38_400,
+  salida: 6_100,
+  cacheLeida: 112_000,
+  costoUsd: 0.84,
+  porTecnica: [
+    { tecnica: 'registro-ci', tokens: 74_200, veces: 3 },
+    { tecnica: 'diff', tokens: 41_300, veces: 5 },
+    { tecnica: 'paso-local', tokens: 31_500, veces: 6 },
+    { tecnica: 'revision', tokens: 22_800, veces: 2 },
+    { tecnica: 'cache-de-paso', tokens: 12_400, veces: 2 },
+  ],
+  tokensEvitados: 182_200,
+  tokensSinHilo: 332_600,
+  ahorro: 0.55,
+  ultimos: [
+    { fecha: new Date().toISOString(), paso: 'arreglar-ci', ref: '#88', modelo: 'claude-sonnet-5-5 · low', local: false, tokens: 9_800, costoUsd: 0.12 },
+    { fecha: new Date().toISOString(), paso: 'entregar', ref: 'GEN-01-BE', modelo: '-', local: true, tokens: 0, costoUsd: 0 },
+  ],
+};
 
 const MODELOS_DEMO: PerfilVista['modelos'] = {
   orquestador: { cli: 'claude', modelo: 'claude-opus-5-5', esfuerzo: 'medium' },
@@ -262,6 +385,14 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
+  autoPlan: (): Promise<PlanAutoVista> => (enElectron ? inv('auto:plan') : Promise.resolve(PLAN_DEMO)),
+  autoBandeja: (): Promise<ItemBandejaVista[]> => (enElectron ? inv('auto:bandeja') : Promise.resolve(BANDEJA_DEMO)),
+  autoCorrer: (ids?: string[]): Promise<{ corrida: string; pasos: number }> => (enElectron ? inv('auto:correr', ids) : Promise.resolve({ corrida: 'demo', pasos: PLAN_DEMO.pasos.length })),
+  autoPublicar: (ids: string[]): Promise<{ publicados: number; errores: string[] }> => (enElectron ? inv('auto:publicar', ids) : Promise.resolve({ publicados: ids.length, errores: [] })),
+  autoDescartar: (ids: string[]): Promise<void> => (enElectron ? inv('auto:descartar', ids) : Promise.resolve()),
+  autoCancelar: (): Promise<void> => (enElectron ? inv('auto:cancelar') : Promise.resolve()),
+  alAuto: (cb: (e: EventoAuto) => void): (() => void) => (enElectron ? window.hilo!.alAuto((e) => cb(e as EventoAuto)) : () => {}),
+  usoResumen: (): Promise<UsoVista> => (enElectron ? inv('uso:resumen') : Promise.resolve(USO_DEMO)),
   chatEnviar: (p: { conv: string; texto?: string; tarea?: { accion: string; ref: string } }): void => {
     if (enElectron) void inv('chat:enviar', p);
     else chatDemo(p);

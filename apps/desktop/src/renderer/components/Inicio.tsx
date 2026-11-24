@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Autopiloto } from './Autopiloto';
 import { api, type Conexion, type MiDiaVista, type PrVista, type Sugerencia } from '../lib/api';
 
 const ROTULO: Record<Sugerencia['tipo'], string> = {
@@ -165,6 +166,8 @@ export function Inicio({ abrirRevision, version, conectar }: { abrirRevision: (n
               </div>
             )}
           </div>
+
+          <Autopiloto version={version + cuenta} />
 
           <h3>Ahora</h3>
           {dia.acciones.length === 0 ? <p className="bien">Todo al día.</p> : (
