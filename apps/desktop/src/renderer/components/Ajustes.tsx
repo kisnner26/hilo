@@ -213,9 +213,9 @@ function TabModelos({ perfil, alCambiar }: { perfil: PerfilVista | null; alCambi
 // ---------- Ahorro de tokens ----------
 
 const PRESETS: Record<'maximo' | 'equilibrado' | 'libre', AhorroVista> = {
-  maximo: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 0.8, presupuesto: 800, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 },
-  equilibrado: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 1.5, presupuesto: 1500, maxSubagentes: 5, maxLineasDiff: 300, maxCaracteresNota: 1000 },
-  libre: { activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, sesionContinua: true, respuestasInmediatas: true, modeloEscalonado: false, cachePasos: true, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 },
+  maximo: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, contextoMinimo: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 0.8, presupuesto: 800, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 },
+  equilibrado: { activo: true, resumen: true, alcance: true, extractos: true, estiloBreve: true, comprimirLogs: true, sesionContinua: true, respuestasInmediatas: true, contextoMinimo: true, modeloEscalonado: true, cachePasos: true, topeUsdPaso: 1.5, presupuesto: 1500, maxSubagentes: 5, maxLineasDiff: 300, maxCaracteresNota: 1000 },
+  libre: { activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, sesionContinua: true, respuestasInmediatas: true, contextoMinimo: false, modeloEscalonado: false, cachePasos: true, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 },
 };
 const TECNICAS: { clave: keyof AhorroVista; nombre: string; detalle: string }[] = [
   { clave: 'resumen', nombre: 'Resumen del proyecto', detalle: 'Un mapa corto en vez de listar todo' },
@@ -224,6 +224,7 @@ const TECNICAS: { clave: keyof AhorroVista; nombre: string; detalle: string }[] 
   { clave: 'estiloBreve', nombre: 'Respuestas breves', detalle: 'Sin preámbulos en código y pruebas' },
   { clave: 'comprimirLogs', nombre: 'Logs y diffs comprimidos', detalle: 'Quita ruido antes de enviar' },
   { clave: 'sesionContinua', nombre: 'Conversación continuada', detalle: 'No reenvía el historial' },
+  { clave: 'contextoMinimo', nombre: 'Contexto mínimo del agente', detalle: 'Sin servidores MCP ni herramientas de más: ~10 mil tokens por consulta en vez de ~69 mil' },
   { clave: 'modeloEscalonado', nombre: 'Modelo según el paso', detalle: 'Redactar con uno ligero, editar código con el de desarrollo' },
   { clave: 'cachePasos', nombre: 'No pagar dos veces', detalle: 'Un paso idéntico sobre el mismo commit reutiliza su respuesta' },
   { clave: 'respuestasInmediatas', nombre: 'Respuestas locales', detalle: '«¿Qué tarea tengo?» sin modelo' },

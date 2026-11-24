@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api, type EstadoMotores, type MotorId } from '../lib/api';
+import { api, type EstadoMotores, type MotorId, type NivelPermisos } from '../lib/api';
+
+const NIVELES: { id: NivelPermisos; nombre: string; detalle: string; aviso?: string }[] = [
+  { id: 'lectura', nombre: 'Solo lectura', detalle: 'Lee archivos y propone. No ejecuta nada.' },
+  { id: 'trabajo', nombre: 'Trabajo', detalle: 'Lee GitHub (gh en solo lectura), edita archivos del proyecto, corre pruebas y guarda commits locales. No publica ni borra.' },
+  { id: 'total', nombre: 'Total', detalle: 'Como Claude Code o Codex con los permisos abiertos: comandos, git push, gh, red y publicar, sin preguntarte antes.', aviso: 'Úsalo solo en tu equipo y con proyectos de confianza: un archivo o un comentario ajeno con instrucciones escondidas podría hacer que el agente las ejecute.' },
+];
 
 const COMANDO = /(brew install [\w-]+|ollama pull [\w.:-]+|npm i -g [\w@/.-]+)/;
 
@@ -94,6 +100,50 @@ export function MotorIA() {
           <span />
         </div>
       )}
+      <div className="permisos-agente">
+        <h4>Permisos del agente</h4>
+        <p className="suave">Qué puede hacer por su cuenta el agente del asistente (Claude Code o Codex), sin que abras sus aplicaciones.</p>
+        <ul className="lista-motores" role="radiogroup" aria-label="Permisos del agente">
+          {NIVELES.map((n) => (
+            <li key={n.id} className={e.permisos === n.id ? 'elegido' : ''}>
+              <button
+                role="radio"
+                aria-checked={e.permisos === n.id}
+                onClick={async () => {
+                  await api.motorPermisos({ permisos: n.id });
+                  await mirar(true);
+                }}
+              >
+                <span className="radio" aria-hidden="true" />
+                <div>
+                  <b>
+                    {n.nombre} {n.id === 'trabajo' && <em className="etiqueta-motor usando">recomendado</em>}
+                  </b>
+                  <span className="suave">{n.detalle}</span>
+                  {e.permisos === n.id && n.aviso && <span className="ayuda-motor">{n.aviso}</span>}
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="fila-interruptor">
+          <div>
+            <b>El piloto automático publica solo</b>
+            <span className="suave">Lo que prepara (comentarios, ramas, PR) sale sin pasar por la bandeja de aprobación.</span>
+          </div>
+          <button
+            className={`interruptor${e.pilotoPublicaSolo ? ' si' : ''}`}
+            role="switch"
+            aria-checked={e.pilotoPublicaSolo}
+            onClick={async () => {
+              await api.motorPermisos({ pilotoPublicaSolo: !e.pilotoPublicaSolo });
+              await mirar(true);
+            }}
+          >
+            {e.pilotoPublicaSolo ? 'Sí' : 'No'}
+          </button>
+        </div>
+      </div>
       <p className="suave nota-uso">
         Un modelo local es más modesto: sirve para redactar, resumir y responder con tus datos, pero editar código y arreglar el CI siguen necesitando Claude Code o Codex.
       </p>

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type EstadoMotores, type TarjetaVista } from '../lib/api';
+import { api, type AdjuntoVista, type EstadoMotores, type TarjetaVista } from '../lib/api';
 import { alPedirDictado, alPreguntarAlAgente, irASeccion, type PedidoAgente } from '../lib/agente';
 import { MENSAJE_ERROR, useDictado } from '../lib/useDictado';
 import { NOMBRE_IDIOMA, PanelVoz, SelectorIdioma } from './Voz';
 import { mdAHtml } from '../lib/markdown';
 
 type Mensaje =
-  | { id: number; de: 'yo'; texto: string }
+  | { id: number; de: 'yo'; texto: string; adjuntos?: { nombre: string; vista?: string }[] }
   | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number; tokens?: number; local?: boolean; accion?: 'piloto' };
 
 const SUGERENCIAS: { t: string; sub: string; icono: string }[] = [
@@ -31,6 +31,31 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   const [conv, setConv] = useState(() => `c${Date.now()}`);
   const fin = useRef<HTMLDivElement>(null);
   const [motor, setMotor] = useState<EstadoMotores | null>(null);
+  const [adjuntos, setAdjuntos] = useState<AdjuntoVista[]>([]);
+  const [preparando, setPreparando] = useState(0);
+  const [errorAdj, setErrorAdj] = useState('');
+  const [arrastrando, setArrastrando] = useState(false);
+  const selector = useRef<HTMLInputElement>(null);
+  const agregar = async (archivos: File[]) => {
+    if (archivos.length === 0) return;
+    setErrorAdj('');
+    for (const f of archivos.slice(0, 8)) {
+      setPreparando((n) => n + 1);
+      try {
+        const a = await api.adjuntoPreparar(f.name || 'pegado.png', new Uint8Array(await f.arrayBuffer()));
+        setAdjuntos((l) => (l.some((x) => x.id === a.id) ? l : [...l, a]));
+      } catch (e) {
+        setErrorAdj(String(e instanceof Error ? e.message : e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+      } finally {
+        setPreparando((n) => n - 1);
+      }
+    }
+  };
+  const cambiarModo = async (a: AdjuntoVista, modo: AdjuntoVista['modo']) => {
+    const n = await api.adjuntoModo(a.id, modo);
+    setAdjuntos((l) => l.map((x) => (x.id === a.id ? (n ?? { ...x, modo, tokensEnviados: modo === 'imagen' ? x.tokensEnviados : Math.min(x.tokensOriginal, 1500) }) : x)));
+  };
+
   useEffect(() => void api.motorEstado().then(setMotor).catch(() => undefined), []);
   const [autoEnvio, setAutoEnvio] = useState(() => {
     try {
@@ -92,7 +117,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
     fin.current?.scrollIntoView({ block: 'end' });
   }, [mensajes]);
 
-  const enviar = (mostrar: string, pedido: { texto?: string; tarea?: { accion: string; ref: string } }) => {
+  const enviar = (mostrar: string, pedido: { texto?: string; tarea?: { accion: string; ref: string } }, conAdjuntos = false) => {
     if (ocupado) return;
     setOcupado(true);
     try {
@@ -100,14 +125,16 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
     } catch {
       /* sin almacenamiento */
     }
-    setMensajes((ms) => [...ms, { id: nuevoId(), de: 'yo', texto: mostrar }, { id: nuevoId(), de: 'asistente', texto: '', escribiendo: true }]);
-    api.chatEnviar({ conv, ...pedido });
+    const lista = conAdjuntos ? adjuntos : [];
+    setMensajes((ms) => [...ms, { id: nuevoId(), de: 'yo', texto: mostrar, ...(lista.length ? { adjuntos: lista.map((a) => ({ nombre: a.nombre, ...(a.vista ? { vista: a.vista } : {}) })) } : {}) }, { id: nuevoId(), de: 'asistente', texto: '', escribiendo: true }]);
+    api.chatEnviar({ conv, ...pedido, ...(lista.length ? { adjuntos: lista.map((a) => a.id) } : {}) });
+    if (conAdjuntos) setAdjuntos([]);
   };
   const preguntar = (t: string) => {
     const limpio = t.trim();
-    if (!limpio) return;
+    if (!limpio && adjuntos.length === 0) return;
     setTexto('');
-    enviar(limpio, { texto: limpio });
+    enviar(limpio || 'Analiza lo que adjunté.', { texto: limpio }, true);
   };
   preguntarRef.current = preguntar;
   const pendiente = useRef<PedidoAgente | null>(null);
@@ -154,7 +181,22 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   };
 
   return (
-    <div className="chat">
+    <div
+      className={`chat${arrastrando ? ' arrastrando' : ''}`}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setArrastrando(true);
+        }
+      }}
+      onDragLeave={(e) => e.currentTarget === e.target && setArrastrando(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setArrastrando(false);
+        void agregar([...e.dataTransfer.files]);
+      }}
+    >
+      {arrastrando && <div className="soltar-aqui">Suelta aquí para adjuntar imágenes y archivos</div>}
       <header className="chat-cabeza">
         <div className="titulo-chat">
           <h2>Asistente</h2>
@@ -202,6 +244,16 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
         {mensajes.map((m) =>
           m.de === 'yo' ? (
             <div key={m.id} className="burbuja yo">
+              {m.adjuntos && m.adjuntos.length > 0 && (
+                <div className="adjuntos-enviados">
+                  {m.adjuntos.map((a) => (
+                    <span key={a.nombre} className="adjunto-enviado" title={a.nombre}>
+                      {a.vista ? <img src={a.vista} alt="" /> : <i aria-hidden="true">▤</i>}
+                      <em>{a.nombre}</em>
+                    </span>
+                  ))}
+                </div>
+              )}
               {m.texto}
             </div>
           ) : (
@@ -291,6 +343,40 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           <PanelVoz estado={dictado.estado} refrescar={dictado.refrescar} />
         </details>
       )}
+      {(adjuntos.length > 0 || preparando > 0 || errorAdj) && (
+        <div className="adjuntos-lista">
+          {adjuntos.map((a) => {
+            const ahorro = a.tokensOriginal > 0 ? Math.round((1 - a.tokensEnviados / a.tokensOriginal) * 100) : 0;
+            return (
+              <div key={a.id} className="adjunto">
+                {a.vista ? <img src={a.vista} alt="" /> : <span className="icono-archivo" aria-hidden="true">{a.formato.slice(0, 4)}</span>}
+                <div className="adjunto-datos">
+                  <b title={a.nombre}>{a.nombre}</b>
+                  <span>
+                    {a.metodo} · <strong>~{a.tokensEnviados.toLocaleString('es')} tokens</strong>
+                    {ahorro >= 10 && <em className="ahorro-adjunto"> −{ahorro} %</em>}
+                  </span>
+                  {a.aviso && <span className="aviso-adjunto">{a.aviso}</span>}
+                </div>
+                {a.modos.length > 1 && (
+                  <span className="selector-idioma" role="group" aria-label="Cómo se manda">
+                    {a.modos.map((m) => (
+                      <button key={m} type="button" className={a.modo === m ? 'activo' : ''} onClick={() => void cambiarModo(a, m)} title={m === 'texto' ? 'Mandar solo el texto leído en tu equipo: cuesta mucho menos' : m === 'imagen' ? 'Mandar la imagen para que el agente la vea' : 'Que el agente lea el archivo'}>
+                        {m === 'texto' ? 'Texto' : m === 'imagen' ? 'Imagen' : 'Archivo'}
+                      </button>
+                    ))}
+                  </span>
+                )}
+                <button type="button" className="quitar-adjunto" onClick={() => setAdjuntos((l) => l.filter((x) => x.id !== a.id))} aria-label={`Quitar ${a.nombre}`}>
+                  ×
+                </button>
+              </div>
+            );
+          })}
+          {preparando > 0 && <div className="adjunto preparando">Leyendo {preparando === 1 ? 'el archivo' : `${preparando} archivos`} en tu equipo…</div>}
+          {errorAdj && <div className="adjunto con-error">{errorAdj}</div>}
+        </div>
+      )}
       <form
         className="compositor"
         onSubmit={(e) => {
@@ -298,10 +384,23 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           preguntar(texto);
         }}
       >
+        <input ref={selector} type="file" multiple hidden onChange={(e) => { void agregar([...(e.target.files ?? [])]); e.target.value = ''; }} />
+        <button type="button" className="clip" onClick={() => selector.current?.click()} title="Adjuntar imágenes, PDF, documentos o cualquier archivo" aria-label="Adjuntar archivos">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.9 1.9 0 01-2.6-2.6l8.2-8.2" />
+          </svg>
+        </button>
         <textarea
+          onPaste={(e) => {
+            const archivos = [...e.clipboardData.files];
+            if (archivos.length > 0) {
+              e.preventDefault();
+              void agregar(archivos);
+            }
+          }}
           value={texto}
           rows={1}
-          placeholder={dictado.fase === 'escuchando' ? 'Habla, te estoy escuchando…' : 'Pregunta lo que quieras o toca el micrófono…'}
+          placeholder={dictado.fase === 'escuchando' ? 'Habla, te estoy escuchando…' : 'Pregunta, habla o adjunta imágenes y archivos…'}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -331,7 +430,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
             )}
           </button>
         )}
-        <button className="enviar" type="submit" disabled={ocupado || !texto.trim()} aria-label="Enviar">
+        <button className="enviar" type="submit" disabled={ocupado || preparando > 0 || (!texto.trim() && adjuntos.length === 0)} aria-label="Enviar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>

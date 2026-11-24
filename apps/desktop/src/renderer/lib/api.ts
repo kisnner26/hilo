@@ -97,6 +97,7 @@ export interface AhorroVista {
   comprimirLogs: boolean;
   sesionContinua: boolean;
   respuestasInmediatas: boolean;
+  contextoMinimo: boolean;
   modeloEscalonado: boolean;
   cachePasos: boolean;
   topeUsdPaso: number;
@@ -257,6 +258,8 @@ export interface EventoAuto {
   texto?: string;
   total?: number;
   listos?: number;
+  publicados?: number;
+  errores?: string[];
   item?: ItemBandejaVista;
 }
 export interface UsoVista {
@@ -347,6 +350,27 @@ export interface EstadoMotores {
   elegido: MotorId;
   preferido: 'auto' | MotorId;
   ollamaModelo?: string;
+  permisos: NivelPermisos;
+  pilotoPublicaSolo: boolean;
+}
+export type NivelPermisos = 'lectura' | 'trabajo' | 'total';
+export type ModoAdjunto = 'imagen' | 'texto' | 'archivo';
+export interface AdjuntoVista {
+  id: string;
+  nombre: string;
+  tipo: string;
+  formato: string;
+  bytes: number;
+  ancho?: number;
+  alto?: number;
+  metodo: string;
+  modo: ModoAdjunto;
+  modos: ModoAdjunto[];
+  tokensOriginal: number;
+  tokensEnviados: number;
+  caracteres: number;
+  aviso?: string;
+  vista?: string;
 }
 
 declare global {
@@ -466,6 +490,18 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
+  motorPermisos: (p: { permisos?: NivelPermisos; pilotoPublicaSolo?: boolean }): Promise<void> => (enElectron ? inv('motor:permisos', p) : Promise.resolve()),
+  adjuntoPreparar: async (nombre: string, bytes: Uint8Array): Promise<AdjuntoVista> => {
+    if (enElectron) return inv('adjuntos:preparar', nombre, bytes);
+    // En la demostración no hay proceso principal: se simula con las medidas reales de la imagen.
+    const esImagen = /\.(png|jpe?g|gif|webp)$/i.test(nombre);
+    const vista = esImagen ? URL.createObjectURL(new Blob([bytes as BlobPart])) : undefined;
+    const dim = esImagen ? await new Promise<{ w: number; h: number }>((r) => { const i = new Image(); i.onload = () => r({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => r({ w: 1600, h: 900 }); i.src = vista!; }) : { w: 0, h: 0 };
+    const original = esImagen ? Math.min(1600, Math.ceil((dim.w * dim.h) / 750)) : Math.ceil(bytes.length / 4);
+    const enviado = esImagen ? Math.min(Math.ceil((Math.min(dim.w, 1280) * Math.min(dim.h, 1280)) / 750), original) : Math.min(original, 3000);
+    return { id: `${nombre}-${bytes.length}`, nombre, tipo: esImagen ? 'imagen' : 'texto', formato: nombre.split('.').pop() ?? '', bytes: bytes.length, ...(esImagen ? { ancho: dim.w, alto: dim.h } : {}), metodo: esImagen ? 'reducida a 1280 px' : 'leído del archivo', modo: esImagen ? 'imagen' : 'texto', modos: esImagen ? ['imagen', 'texto'] : ['texto'], tokensOriginal: original, tokensEnviados: enviado, caracteres: 0, ...(vista ? { vista } : {}) };
+  },
+  adjuntoModo: async (id: string, modo: ModoAdjunto): Promise<AdjuntoVista | undefined> => (enElectron ? inv('adjuntos:modo', id, modo) : undefined),
   motorEstado: (forzar = false): Promise<EstadoMotores> =>
     enElectron
       ? inv('motor:estado', forzar)
@@ -480,6 +516,8 @@ export const api = {
           ollama: { activo: false, modelos: [] },
           elegido: 'claude',
           preferido: 'auto',
+          permisos: 'trabajo',
+          pilotoPublicaSolo: false,
         }),
   motorFijar: (id: 'auto' | MotorId): Promise<void> => (enElectron ? inv('motor:fijar', id) : Promise.resolve()),
   motorOllamaModelo: (m: string): Promise<void> => (enElectron ? inv('motor:ollama-modelo', m) : Promise.resolve()),
@@ -522,7 +560,7 @@ export const api = {
   autoCancelar: (): Promise<void> => (enElectron ? inv('auto:cancelar') : Promise.resolve()),
   alAuto: (cb: (e: EventoAuto) => void): (() => void) => (enElectron ? window.hilo!.alAuto((e) => cb(e as EventoAuto)) : () => {}),
   usoResumen: (): Promise<UsoVista> => (enElectron ? inv('uso:resumen') : Promise.resolve(USO_DEMO)),
-  chatEnviar: (p: { conv: string; texto?: string; tarea?: { accion: string; ref: string } }): void => {
+  chatEnviar: (p: { conv: string; texto?: string; tarea?: { accion: string; ref: string }; adjuntos?: string[] }): void => {
     if (enElectron) void inv('chat:enviar', p);
     else chatDemo(p);
   },
