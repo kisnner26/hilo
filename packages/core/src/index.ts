@@ -25,3 +25,4 @@ export * from './autopiloto.js';
 export * from './analisis-grafo.js';
 export * from './whisper.js';
 export * from './audio.js';
+export * from './actualizar.js';
