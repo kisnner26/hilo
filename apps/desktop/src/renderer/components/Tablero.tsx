@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PreguntarAgente } from './PreguntarAgente';
 import { api, type ColaVista, type PlanVista } from '../lib/api';
 
 export function Tablero() {
@@ -21,7 +22,10 @@ export function Tablero() {
   };
   return (
     <div className="columna ancha">
-      <h2>Tablero</h2>
+      <div className="fila-titulo">
+        <h2>Tablero</h2>
+        <PreguntarAgente etiqueta="¿Qué reviso primero?" pedido={{ mostrar: '¿Qué PR reviso primero y por qué?', texto: '¿Qué PR debería revisar primero y por qué? Considera tamaño, rondas y quién espera.' }} />
+      </div>
 
       <h3>Cola de revisión</h3>
       <button className="boton secundario" disabled={ocupado === 'cola'} onClick={() => void correr('cola', async () => setCola(await api.cola()))}>

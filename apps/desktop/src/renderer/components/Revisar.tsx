@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PreguntarAgente } from './PreguntarAgente';
 import { api, type Informe, type RevisionVista } from '../lib/api';
 
 type Filtro = 'todos' | 'errores' | 'listos';
@@ -105,6 +106,7 @@ function RevisionAutomatica() {
                       Publicar en el PR
                     </button>
                   )}
+                  <PreguntarAgente etiqueta="Explicar y proponer arreglo" pedido={{ mostrar: `Ayúdame con el PR #${r.numero}`, tarea: { accion: 'revisar', ref: String(r.numero) } }} />
                   {msg[r.numero] && <span className="suave">{msg[r.numero]}</span>}
                 </div>
               </div>

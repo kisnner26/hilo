@@ -27,6 +27,14 @@ un botón, «hacer mis pendientes». hilo ordena los pasos del más barato al m�
 - después de editar, hilo corre las comprobaciones del perfil sin pasar por el modelo; solo lo que falla vuelve, comprimido, y se reintenta una vez.
 - la preparación diaria (tarea programada) deja listo, sin gastar tokens, lo que hilo resuelve solo.
 
+### el grafo, útil de verdad
+
+elige un nodo y hilo te dice, sin gastar tokens, qué usa, qué lo usa y qué podría romperse si lo cambias (hasta 3 saltos), busca el camino entre dos nodos y te sugiere por dónde empezar a leer. desde ahí le preguntas al agente con solo ese contexto: la pantalla muestra cuántos tokens manda frente al proyecto entero. fija varios nodos para armar un paquete a la medida y copiarlo a tu propia terminal.
+
+### el agente en toda la app
+
+`⌘K` (o `ctrl+k`) abre la paleta desde cualquier pantalla: pregunta, salta a una sección o busca un nodo. cada pantalla tiene su botón para preguntar con el contexto justo. la navegación se puede mover (izquierda, derecha, arriba, abajo), reducir a iconos u ocultar con `⌘B`, y se recuerda.
+
 ### ahorro de tokens, medido
 
 ajustes › ahorro muestra dos cifras por separado: lo **gastado**, que cuenta la propia cli de claude code o codex al terminar cada paso, y lo **evitado**, que compara el texto crudo con el que hilo mandó (caracteres entre 4: es una estimación, no una factura). las técnicas: registros de ci reducidos al fallo, comentarios de revisión compactos con archivo y línea, diffs comprimidos, modelo ligero para redactar y el de desarrollo solo para editar, respuesta reutilizada si el paso es idéntico sobre el mismo commit, tope de gasto por paso y pasos que no usan modelo.

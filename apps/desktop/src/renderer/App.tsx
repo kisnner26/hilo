@@ -10,7 +10,14 @@ import { Revisar } from './components/Revisar';
 import { Recorrido, type PasoRecorrido } from './components/Recorrido';
 import { Tablero } from './components/Tablero';
 import { AgentesPanel, HilosPanel } from './components/Panels';
-import { api, type Conexion, type PerfilVista } from './lib/api';
+import { BarraTitulo } from './components/BarraTitulo';
+import { InspectorNodo } from './components/InspectorNodo';
+import { PaqueteFijado } from './components/PaqueteFijado';
+import { Paleta } from './components/Paleta';
+import { alPreguntarAlAgente } from './lib/agente';
+import { useDisposicion } from './lib/disposicion';
+import { verGrafo } from './lib/grafoDatos';
+import { api, enElectron, type Conexion, type PerfilVista } from './lib/api';
 import type { NodoVista } from './lib/galaxy';
 
 type Vista = 'asistente' | 'inicio' | 'tablero' | 'grafo' | 'notas' | 'revisar' | 'agentes' | 'hilos' | 'ajustes';
@@ -60,57 +67,6 @@ const guardar = (k: string, v: string) => {
   }
 };
 
-function Inspector({ nodo, cerrar }: { nodo: NodoVista; cerrar: () => void }) {
-  const [info, setInfo] = useState<{ tokens: number; nodos: number } | null>(null);
-  const [copiado, setCopiado] = useState(false);
-  useEffect(() => {
-    setInfo(null);
-    setCopiado(false);
-    void api.contexto({ alcance: { tipo: 'vecindad', nodo: nodo.id, saltos: 2 }, conciso: true, sinRuido: true }).then((p) => setInfo({ tokens: p.tokens, nodos: p.nodos ?? 0 }));
-  }, [nodo]);
-  return (
-    <aside className="inspector">
-      <header>
-        <strong>{nodo.label}</strong>
-        <button className="cerrar" onClick={cerrar} aria-label="Cerrar">
-          ×
-        </button>
-      </header>
-      <dl>
-        <dt>Carpeta</dt>
-        <dd>{nodo.nombreComunidad}</dd>
-        {nodo.archivo && (
-          <>
-            <dt>Archivo</dt>
-            <dd className="mono">{nodo.archivo}</dd>
-          </>
-        )}
-        {nodo.tipo && (
-          <>
-            <dt>Tipo</dt>
-            <dd>{nodo.tipo}</dd>
-          </>
-        )}
-      </dl>
-      <button
-        className="boton"
-        onClick={async () => {
-          const p = await api.contexto({ alcance: { tipo: 'vecindad', nodo: nodo.id, saltos: 2 }, conciso: true, sinRuido: true });
-          await api.copiar(p.texto);
-          setCopiado(true);
-        }}
-      >
-        {copiado ? 'Copiado' : 'Copiar contexto de la vecindad'}
-      </button>
-      {info && (
-        <p className="suave">
-          ~{info.tokens.toLocaleString('es')} tokens · {info.nodos} nodos. Solo lo cercano a este nodo, no todo el proyecto.
-        </p>
-      )}
-    </aside>
-  );
-}
-
 export function App() {
   const [vista, setVista] = useState<Vista>('asistente');
   const [nodo, setNodo] = useState<NodoVista | null>(null);
@@ -124,6 +80,23 @@ export function App() {
   const [esperaRol, setEsperaRol] = useState(true);
   const [ayuda, setAyuda] = useState(false);
   const [pestanaAjustes, setPestanaAjustes] = useState<PestanaAjustes>('cuentas');
+  const [paleta, setPaleta] = useState(false);
+  const [fijados, setFijados] = useState<string[]>([]);
+  const [senalEnfocar, setSenalEnfocar] = useState(0);
+  const disp = useDisposicion();
+  const mac = (typeof window !== 'undefined' && window.hilo?.plataforma === 'darwin') || (!enElectron && /[?&]mac\b/.test(location.search));
+
+  useEffect(() => alPreguntarAlAgente(() => setVista('asistente')), []);
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaleta((x) => !x);
+      }
+    };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, []);
 
   useEffect(() => void api.perfil().then(setPerfil), [recarga]);
 
@@ -166,22 +139,45 @@ export function App() {
     { titulo: 'Listo', texto: 'Empieza por el Asistente. El botón Ayuda siempre está abajo a la izquierda.' },
   ];
 
+  const elegirId = (id: string) => {
+    const n = verGrafo().nodos.find((x) => x.id === id);
+    if (!n) return;
+    setNodo(n as NodoVista);
+    setSenalEnfocar((x) => x + 1);
+    setVista('grafo');
+  };
+  const alternarFijado = (id: string) => setFijados((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+
   const abrirRevision = (n: string) => {
     setPrARevisar(n);
     setVista('revisar');
   };
 
   return (
-    <div className="aplicacion">
+    <div className={`aplicacion pos-${disp.pos} modo-${disp.modo}${mac ? ' mac' : ''}`}>
       <div className="fondo-liquido" aria-hidden="true">
         <span />
         <span />
         <span />
       </div>
-      <div className="barra-titulo" />
-      <nav className="riel vidrio">
+      <BarraTitulo
+        mac={mac}
+        seccion={SECCIONES.find((x) => x.id === vista)?.nombre ?? (vista === 'revisar' ? 'Revisar PR' : 'Hilo')}
+        pos={disp.pos}
+        modo={disp.modo}
+        cambiar={disp.cambiar}
+        alternar={disp.alternar}
+        abrirPaleta={() => setPaleta(true)}
+        abrirAhorro={() => {
+          setPestanaAjustes('ahorro');
+          setVista('ajustes');
+        }}
+        abrirAyuda={() => setAyuda(true)}
+      />
+      <div className="cuerpo">
+      <nav className={`riel vidrio${disp.modo === 'iconos' ? ' solo-iconos' : ''}`} aria-label="Navegación">
         {visibles.map((s) => (
-          <button key={s.id} data-tour={s.id} className={`riel-boton${vista === s.id ? ' activo' : ''}`} onClick={() => setVista(s.id)} title={s.nombre} aria-label={s.nombre}>
+          <button key={s.id} data-tour={s.id} className={`riel-boton${vista === s.id ? ' activo' : ''}`} onClick={() => setVista(s.id)} title={`${s.nombre}: ${s.corto}`} aria-label={s.nombre}>
             {s.icono}
             <span>{s.nombre}</span>
           </button>
@@ -202,8 +198,9 @@ export function App() {
           </div>
         )}
         <div className={vista === 'grafo' ? 'ocupa' : 'oculta'}>
-          <GraphView elegido={nodo} recargar={recarga} alElegir={(n) => setNodo(n)} />
-          {nodo && <Inspector nodo={nodo} cerrar={() => setNodo(null)} />}
+          <GraphView elegido={nodo} recargar={recarga} enfocar={senalEnfocar} alElegir={(n) => setNodo(n)} />
+          {nodo && <InspectorNodo nodo={nodo} cerrar={() => setNodo(null)} alElegir={elegirId} fijado={fijados.includes(nodo.id)} alFijar={() => alternarFijado(nodo.id)} abrirNota={() => setVista('notas')} />}
+          <PaqueteFijado ids={fijados} quitar={alternarFijado} vaciar={() => setFijados([])} />
         </div>
         <div className={vista === 'asistente' ? 'ocupa' : 'oculta'}>
           <Chat rol={rol} saludo={con?.github.login ?? con?.clickup.usuario} />
@@ -216,7 +213,17 @@ export function App() {
         {vista === 'hilos' && <HilosPanel />}
         {vista === 'ajustes' && <Ajustes perfil={perfil} inicial={pestanaAjustes} alCambiar={() => setRecarga((x) => x + 1)} verRecorrido={() => setFase('recorrido')} />}
       </main>
+      </div>
 
+      {paleta && (
+        <Paleta
+          vista={vista}
+          destinos={visibles.map((x) => ({ id: x.id, nombre: x.nombre, corto: x.corto }))}
+          ir={(id) => setVista(id as Vista)}
+          irANodo={elegirId}
+          cerrar={() => setPaleta(false)}
+        />
+      )}
       {ayuda && (
         <Ayuda
           cerrar={() => setAyuda(false)}

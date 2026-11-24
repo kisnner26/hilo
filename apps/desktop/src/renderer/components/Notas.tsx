@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, type NotaVista } from '../lib/api';
 import { mdAHtml } from '../lib/markdown';
 import type { NodoVista } from '../lib/galaxy';
+import { extractoRelevante } from '../lib/extracto';
+import { PreguntarAgente } from './PreguntarAgente';
 
 const minutos = (palabras: number) => Math.max(1, Math.round(palabras / 200));
 
@@ -79,15 +81,19 @@ export function Notas({ nodo }: { nodo: NodoVista | null }) {
                   {minutos(actual.palabras)} min de lectura · {actual.palabras.toLocaleString('es')} palabras
                 </span>
               </div>
-              <button
-                className="boton secundario"
-                onClick={async () => {
-                  await api.copiar(texto);
-                  setCopiado(true);
-                }}
-              >
-                {copiado ? 'Copiada' : 'Copiar'}
-              </button>
+              <div className="botones-accion">
+                <PreguntarAgente etiqueta="Resumir" pedido={{ mostrar: `Resume «${actual.titulo}»`, texto: `Resume esta nota en 5 líneas y dime qué decisiones o pendientes contiene. Usa solo su texto.\n\n# ${actual.titulo}\n${extractoRelevante(texto, 'decisión pendiente objetivo alcance conclusión', 2400)}` }} />
+                <PreguntarAgente etiqueta="¿Qué me toca?" pedido={{ mostrar: `¿Qué de «${actual.titulo}» me toca a mí?`, texto: `Según esta nota, ¿qué me corresponde hacer a mí según mi rol y mis tareas? Si no consta, dilo.\n\n# ${actual.titulo}\n${extractoRelevante(texto, 'responsable tarea entrega rol pendiente', 2000)}` }} />
+                <button
+                  className="boton secundario"
+                  onClick={async () => {
+                    await api.copiar(texto);
+                    setCopiado(true);
+                  }}
+                >
+                  {copiado ? 'Copiada' : 'Copiar'}
+                </button>
+              </div>
             </header>
             <div className="cuerpo-nota" dangerouslySetInnerHTML={{ __html: mdAHtml(texto) }} />
           </>

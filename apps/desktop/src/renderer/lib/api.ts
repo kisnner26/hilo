@@ -137,6 +137,8 @@ export interface EventoChat {
   pregunta?: string;
   modelo?: string;
   ms?: number;
+  /** Tokens de entrada y salida que informó el agente al terminar. */
+  tokens?: number;
 }
 export interface PaqueteVista {
   texto: string;

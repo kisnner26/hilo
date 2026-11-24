@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type TarjetaVista } from '../lib/api';
+import { alPreguntarAlAgente, type PedidoAgente } from '../lib/agente';
 import { mdAHtml } from '../lib/markdown';
 
 type Mensaje =
   | { id: number; de: 'yo'; texto: string }
-  | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number };
+  | { id: number; de: 'asistente'; texto: string; tarjetas?: TarjetaVista[]; pregunta?: string; escribiendo?: boolean; error?: boolean; modelo?: string; ms?: number; tokens?: number; local?: boolean };
 
 const SUGERENCIAS: { t: string; sub: string }[] = [
   { t: '¿Qué tarea tengo?', sub: 'Tus tareas de ClickUp' },
@@ -36,10 +37,10 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           const resto = ms.slice(0, -1);
           const ultimo = ms[ms.length - 1];
           if (!ultimo || ultimo.de !== 'asistente') return ms;
-          if (e.tipo === 'respuesta') return [...resto, { ...ultimo, texto: e.texto ?? '', tarjetas: e.tarjetas, pregunta: e.pregunta, escribiendo: false }];
+          if (e.tipo === 'respuesta') return [...resto, { ...ultimo, texto: e.texto ?? '', tarjetas: e.tarjetas, pregunta: e.pregunta, escribiendo: false, local: true }];
           if (e.tipo === 'inicio') return [...resto, { ...ultimo, modelo: e.modelo }];
           if (e.tipo === 'delta') return [...resto, { ...ultimo, texto: ultimo.texto + (e.texto ?? '') }];
-          if (e.tipo === 'fin') return [...resto, { ...ultimo, texto: e.texto || ultimo.texto, escribiendo: false, ms: e.ms }];
+          if (e.tipo === 'fin') return [...resto, { ...ultimo, texto: e.texto || ultimo.texto, escribiendo: false, ms: e.ms, ...(e.tokens ? { tokens: e.tokens } : {}) }];
           if (e.tipo === 'error') return [...resto, { ...ultimo, texto: e.texto ?? 'Algo falló.', escribiendo: false, error: true }];
           return ms;
         });
@@ -68,6 +69,42 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
     setTexto('');
     enviar(limpio, { texto: limpio });
   };
+  const pendiente = useRef<PedidoAgente | null>(null);
+  const lanzar = (p: PedidoAgente) => {
+    if (p.tarea) enviar(p.mostrar, { tarea: p.tarea });
+    else enviar(p.mostrar, { texto: p.texto ?? p.mostrar });
+  };
+  const lanzarRef = useRef(lanzar);
+  lanzarRef.current = lanzar;
+  useEffect(
+    () =>
+      alPreguntarAlAgente((p) => {
+        pendiente.current = p;
+        if (!ocupadoRef.current) {
+          pendiente.current = null;
+          lanzarRef.current(p);
+        }
+      }),
+    [],
+  );
+  const ocupadoRef = useRef(ocupado);
+  ocupadoRef.current = ocupado;
+  useEffect(() => {
+    if (!ocupado && pendiente.current) {
+      const p = pendiente.current;
+      pendiente.current = null;
+      lanzarRef.current(p);
+    }
+  }, [ocupado]);
+  const largo = mensajes.length >= 16 && !ocupado;
+  const retomar = async () => {
+    const r = await api.sesionNueva();
+    void api.chatNueva(conv);
+    setConv(`c${Date.now()}`);
+    setMensajes([]);
+    setOcupado(false);
+    setTimeout(() => lanzarRef.current({ mostrar: 'Retomar con un resumen', texto: r.texto }), 0);
+  };
   const nueva = () => {
     void api.chatNueva(conv);
     setConv(`c${Date.now()}`);
@@ -90,6 +127,14 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
         </button>
       </header>
 
+      {largo && (
+        <div className="aviso-largo">
+          <span>Esta conversación ya es larga: cada mensaje nuevo arrastra todo lo anterior y gasta más.</span>
+          <button className="boton secundario" onClick={() => void retomar()}>
+            Seguir en una nueva con resumen
+          </button>
+        </div>
+      )}
       <div className="chat-mensajes">
         {mensajes.length === 0 && (
           <div className="chat-vacio">
@@ -137,6 +182,8 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
                   <button className="enlace" onClick={() => void api.copiar(m.texto)}>
                     Copiar
                   </button>
+                  {m.local && <span className="etiqueta-cero">Sin gastar tokens</span>}
+                  {m.tokens ? <span className="suave">{m.tokens.toLocaleString('es')} tokens</span> : null}
                   {m.modelo && <span className="suave">{m.modelo}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)} s` : ''}</span>}
                 </div>
               )}

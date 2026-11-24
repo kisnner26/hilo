@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Autopiloto } from './Autopiloto';
+import { PreguntarAgente } from './PreguntarAgente';
 import { api, type Conexion, type MiDiaVista, type PrVista, type Sugerencia } from '../lib/api';
 
 const ROTULO: Record<Sugerencia['tipo'], string> = {
@@ -54,6 +55,10 @@ function Accion({ a, dia, abrirRevision }: { a: Sugerencia; dia: MiDiaVista; abr
               {abierta ? 'Cerrar' : 'Preparar'}
             </button>
           )}
+          <PreguntarAgente
+            etiqueta="Ayuda"
+            pedido={{ mostrar: a.texto, tarea: { accion: a.tipo === 'bloqueo' ? 'bloqueo' : pr ? 'revisar' : a.tipo === 'abrir-pr' ? 'hacer' : 'entender', ref: pr ?? a.ref } }}
+          />
           {a.tipo === 'abrir-pr' && (
             <button className="boton secundario" onClick={() => void api.copiar(`git switch -c feature/${(dia.saludo || 'yo').toLowerCase()}-${a.ref}`)}>
               Copiar rama
