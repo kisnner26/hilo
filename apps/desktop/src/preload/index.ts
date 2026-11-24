@@ -66,6 +66,9 @@ const CANALES = [
   'motor:estado',
   'motor:fijar',
   'motor:ollama-modelo',
+  'motor:permisos',
+  'adjuntos:preparar',
+  'adjuntos:modo',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {

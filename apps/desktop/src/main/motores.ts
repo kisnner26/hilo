@@ -4,8 +4,8 @@ import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
 
 export interface DepsMotores {
-  config(): { motor?: 'auto' | core.MotorId; ollamaModelo?: string };
-  guardar(patch: { motor?: 'auto' | core.MotorId; ollamaModelo?: string }): void;
+  config(): { motor?: 'auto' | core.MotorId; ollamaModelo?: string; permisosAgente?: core.NivelPermisos; pilotoPublicaSolo?: boolean };
+  guardar(patch: { motor?: 'auto' | core.MotorId; ollamaModelo?: string; permisosAgente?: core.NivelPermisos; pilotoPublicaSolo?: boolean }): void;
 }
 
 export interface MotorElegido {
@@ -90,11 +90,15 @@ export function registrarMotores(d: DepsMotores) {
   ipcMain.handle('motor:estado', async (_e, forzar?: boolean) => {
     const e = await estados(Boolean(forzar));
     const el = core.elegirMotor(e.lista, d.config().motor ?? 'auto');
-    return { ...e, elegido: el, preferido: d.config().motor ?? 'auto', ollamaModelo: d.config().ollamaModelo };
+    return { ...e, elegido: el, preferido: d.config().motor ?? 'auto', ollamaModelo: d.config().ollamaModelo, permisos: d.config().permisosAgente ?? 'trabajo', pilotoPublicaSolo: Boolean(d.config().pilotoPublicaSolo) };
   });
   ipcMain.handle('motor:fijar', (_e, id: 'auto' | core.MotorId) => {
     d.guardar({ motor: id });
     cache = undefined;
+  });
+  ipcMain.handle('motor:permisos', (_e, p: { permisos?: core.NivelPermisos; pilotoPublicaSolo?: boolean }) => {
+    if (p.permisos && !['lectura', 'trabajo', 'total'].includes(p.permisos)) throw new Error('Nivel de permisos no válido.');
+    d.guardar({ ...(p.permisos ? { permisosAgente: p.permisos } : {}), ...(p.pilotoPublicaSolo !== undefined ? { pilotoPublicaSolo: p.pilotoPublicaSolo } : {}) });
   });
   ipcMain.handle('motor:ollama-modelo', (_e, modelo: string) => {
     d.guardar({ ollamaModelo: modelo });

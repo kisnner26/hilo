@@ -12,7 +12,7 @@ import { asignadoParaAgente } from './motores';
  */
 
 export interface DepsAuto {
-  config(): { proyecto?: string; ahorro?: Partial<core.AjustesAhorro>; rol?: core.RolId };
+  config(): { proyecto?: string; ahorro?: Partial<core.AjustesAhorro>; rol?: core.RolId; pilotoPublicaSolo?: boolean };
   perfil(): core.Perfil;
   repo(): string;
   github(): Promise<{ api: core.GitHubApi } | undefined>;
@@ -148,8 +148,21 @@ export function registrarAutopiloto(d: DepsAuto): { prepararSinTokens: () => Pro
     await core.correrSubagentes(libres, 4, uno);
     await core.correrSubagentes(ligeros, 2, uno);
     for (const x of pesados) await uno(x);
-    emitir({ corrida, tipo: 'fin', listos, total });
-    if (listos > 0) d.avisar(`Autopiloto: ${listos} cosa${listos === 1 ? '' : 's'} lista${listos === 1 ? '' : 's'} para aprobar.`);
+    // Con «publicar solo» activado, lo preparado sale sin pasar por la bandeja.
+    let publicadosSolo = 0;
+    let erroresSolo: string[] = [];
+    if (d.config().pilotoPublicaSolo && !senal.aborted) {
+      const ids = items().filter((i) => i.corrida === corrida && i.estado === 'listo' && i.paso.salida !== 'ninguna').map((i) => i.id);
+      if (ids.length > 0) {
+        const r = await publicar(ids, true);
+        publicadosSolo = r.publicados;
+        erroresSolo = r.errores;
+      }
+    }
+    const pendientes = items().filter((i) => i.corrida === corrida && i.estado === 'listo').length;
+    emitir({ corrida, tipo: 'fin', listos: pendientes, total, publicados: publicadosSolo, errores: erroresSolo });
+    if (publicadosSolo > 0) d.avisar(`Autopiloto: publiqué ${publicadosSolo} cosa${publicadosSolo === 1 ? '' : 's'}${erroresSolo.length ? ` y ${erroresSolo.length} fallaron` : ''}.`);
+    else if (pendientes > 0) d.avisar(`Autopiloto: ${pendientes} cosa${pendientes === 1 ? '' : 's'} lista${pendientes === 1 ? '' : 's'} para aprobar.`);
   }
 
   async function ejecutarPaso(corrida: string, paso: core.PasoAuto, p: Awaited<ReturnType<typeof plan>>, senal: AbortSignal, alTexto: (t: string) => void): Promise<ItemBandeja> {
@@ -203,7 +216,7 @@ export function registrarAutopiloto(d: DepsAuto): { prepararSinTokens: () => Pro
         evitados.push({ tecnica: 'modelo-local', antes: core.estimarTokens(sistema + prompt), despues: 0 });
         return { texto, codigoSalida: 0, duracionMs: Date.now() - t0, eventos: 0 } as core.Resultado;
       }
-      return core.ejecutar({ asignado, sistema: asignado.cli === 'claude' ? sistema : undefined, prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`, cwd, soloLectura: !escritura, escritura, ...(asignado.cli === 'claude' ? { presupuestoUsd: tope, sinSesion: true } : {}), senal, alTexto });
+      return core.ejecutar({ asignado, sistema: asignado.cli === 'claude' ? sistema : undefined, prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`, cwd, soloLectura: !escritura, escritura, ligero: ah.contextoMinimo, ...(asignado.cli === 'claude' ? { presupuestoUsd: tope, sinSesion: true } : {}), senal, alTexto });
     };
     const modelo = core.esModeloLocal(motorAhora.id) && !paso.escritura ? motorAhora.nombre : `${asignado.modelo} · ${asignado.esfuerzo}`;
 
@@ -289,11 +302,11 @@ export function registrarAutopiloto(d: DepsAuto): { prepararSinTokens: () => Pro
     return { ...base, modelo, texto: r.texto, ...(gastado?.costoUsd !== undefined ? { costoUsd: gastado.costoUsd } : {}), detalle: { resumen: cambios.resumen, rama, dir: espacio.dir, verificacion, archivos: cambios.archivos, ...(tareaClick ? { titulo: tareaClick.nombre.replace(/^[A-Z0-9-]+\s*[—–-]\s*/, ''), idClickup: tareaClick.id } : {}) } };
   }
 
-  async function publicar(ids: string[]): Promise<{ publicados: number; errores: string[] }> {
+  async function publicar(ids: string[], sinConfirmar = false): Promise<{ publicados: number; errores: string[] }> {
     const elegidos = items().filter((i) => ids.includes(i.id) && i.estado === 'listo' && i.paso.salida !== 'ninguna');
     if (elegidos.length === 0) return { publicados: 0, errores: ['No hay nada listo para publicar en lo elegido.'] };
     const resumen = elegidos.map((i) => `• ${i.paso.titulo}\n  ${(i.detalle?.resumen ?? i.texto).replace(/\s+/g, ' ').slice(0, 160)}`).join('\n\n');
-    if (!(await d.confirmar(`${elegidos.length} destino${elegidos.length === 1 ? '' : 's'} (GitHub y ClickUp)`, resumen))) return { publicados: 0, errores: [] };
+    if (!sinConfirmar && !(await d.confirmar(`${elegidos.length} destino${elegidos.length === 1 ? '' : 's'} (GitHub y ClickUp)`, resumen))) return { publicados: 0, errores: [] };
     const gh = await d.github();
     const cu = d.clickup();
     const perfil = d.perfil();

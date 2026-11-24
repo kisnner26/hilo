@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
 import { registrarAutopiloto, registrarUso } from './autopiloto';
 import { registrarActualizador } from './actualizador';
+import { registrarAdjuntos } from './adjuntos';
 import { registrarDictado } from './dictado';
 import { asignadoParaAgente, registrarMotores } from './motores';
 
@@ -54,6 +55,10 @@ interface Config {
   /** Motor de IA: automático (el mejor que haya) o uno elegido a mano. */
   motor?: 'auto' | core.MotorId;
   ollamaModelo?: string;
+  /** Cuánto puede hacer el agente del chat por su cuenta: lectura, trabajo (por defecto) o total. */
+  permisosAgente?: core.NivelPermisos;
+  /** El piloto automático publica solo lo que prepara, sin pedir aprobación una por una. */
+  pilotoPublicaSolo?: boolean;
   /** Revisar si hay una versión nueva cada pocas horas (solo avisa, no instala). Por defecto sí. */
   actualizacionesAuto?: boolean;
   /** Repositorio donde se publican los releases de Hilo, para contar descargas. */
@@ -379,6 +384,7 @@ interface Conversacion {
 }
 const conversaciones = new Map<string, Conversacion>();
 let motores: ReturnType<typeof registrarMotores>;
+let adjuntos: ReturnType<typeof registrarAdjuntos>;
 const historiales = new Map<string, string[]>();
 let diaCache: { hasta: number; dia: core.MiDia } | undefined;
 let calculoCache: { hasta: number; r: Awaited<ReturnType<typeof calcularMiDia>> } | undefined;
@@ -402,6 +408,8 @@ interface PedidoChat {
   conv: string;
   texto?: string;
   tarea?: { accion: core.AccionTarea; ref: string };
+  /** Ids de archivos ya preparados con «adjuntos:preparar». */
+  adjuntos?: string[];
 }
 
 async function turnoDeChat(p: PedidoChat): Promise<void> {
@@ -463,9 +471,20 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
       if (extra) prompt = `${p.texto}\n\n[Notas del proyecto que pueden ayudar]\n${extra}`;
     }
 
+    // Adjuntos: se leen en tu equipo y solo se manda lo que importa para la pregunta.
+    const motorAdj = await motores.elegido();
+    const bloqueAdj = p.adjuntos?.length ? adjuntos.bloque(p.adjuntos, p.texto ?? prompt, motorAdj.id) : undefined;
+    if (bloqueAdj?.texto) prompt = `${bloqueAdj.texto}\n\n${prompt || 'Analiza lo que adjunté.'}`;
+    if (bloqueAdj && bloqueAdj.antes > bloqueAdj.despues) evitadosChat.push({ tecnica: 'adjuntos', antes: bloqueAdj.antes, despues: bloqueAdj.despues });
+    const permisos = cfg.permisosAgente ?? 'trabajo';
+
     const contextoBase = ah.resumen ? core.resumenEstatico(grafo, { porComunidad: 2, maxComunidades: 10 }) : core.paqueteDeContexto(grafo, { alcance: { tipo: 'todo' }, rol: dia.rol, conciso: true, sinRuido: true, presupuesto: ah.presupuesto }).texto;
-    const sistema = core.promptSistemaChat(perfil, dia, contextoBase, repo, ah.estiloBreve ? 'breve' : 'normal');
+    const sistema = core.promptSistemaChat(perfil, dia, contextoBase, repo, ah.estiloBreve ? 'breve' : 'normal', core.esAgente(motorAdj.id) ? permisos : 'lectura');
     const motor = await motores.elegido();
+    if (motor.id === 'reglas' && bloqueAdj?.texto) {
+      emitir({ tipo: 'respuesta', texto: `Sin un modelo de IA no puedo analizar tus adjuntos, pero esto es lo que leí en tu equipo:\n\n${bloqueAdj.texto}\n\n_Conecta Claude Code o Codex, o activa un modelo local en Ajustes › Modelos, para que los analice._`, tarjetas: [] });
+      return;
+    }
     if (motor.id === 'reglas') {
       // Sin ninguna IA: se busca en las notas y en el mapa, y para una tarea se muestran sus datos.
       const base = p.tarea ? `Sin un modelo de IA no puedo explicarla ni proponer un plan, pero esto es lo que consta de ${p.tarea.ref}:\n\n${prompt.split('\n\n').slice(1).join('\n\n') || '(sin más datos)'}\n\n_Conecta Claude Code o Codex, o activa un modelo en tu equipo en Ajustes › Modelos, para que lo explique._` : undefined;
@@ -494,7 +513,11 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
       sistema: asignado.cli === 'claude' ? sistema : undefined,
       prompt: asignado.cli === 'claude' ? prompt : `${sistema}\n\n${prompt}`,
       cwd,
-      soloLectura: true,
+      permisos,
+      soloLectura: permisos === 'lectura',
+      ligero: ah.contextoMinimo,
+      ...(bloqueAdj?.carpetas.length ? { carpetas: bloqueAdj.carpetas } : {}),
+      ...(asignado.cli === 'codex' && bloqueAdj?.imagenes.length ? { imagenes: bloqueAdj.imagenes } : {}),
       ...(asignado.cli === 'claude' ? { sesion: ah.sesionContinua ? { id: conv.sesion, reanudar: conv.creada } : { id: randomUUID(), reanudar: false } } : {}),
       alTexto: (delta) => emitir({ tipo: 'delta', texto: delta }),
     });
@@ -943,6 +966,7 @@ void app.whenReady().then(() => {
   registrarIpcExtra();
   registrarIpcConexiones();
   registrarDictado(enviar);
+  adjuntos = registrarAdjuntos({ ahorro: () => core.ahorroEfectivo(leerConfig().ahorro) });
   motores = registrarMotores({ config: leerConfig, guardar: (patch) => void guardarConfig({ ...leerConfig(), ...patch }) });
   registrarActualizador({
     enviar,
