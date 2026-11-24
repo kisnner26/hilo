@@ -20,3 +20,4 @@ export * from './ahorro-config.js';
 export * from './bloqueos.js';
 export * from './digestos.js';
 export * from './uso.js';
+export * from './espacio.js';
