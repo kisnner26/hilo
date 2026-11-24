@@ -35,6 +35,10 @@ elige un nodo y hilo te dice, sin gastar tokens, qué usa, qué lo usa y qué po
 
 `⌘K` (o `ctrl+k`) abre la paleta desde cualquier pantalla: pregunta, salta a una sección o busca un nodo. cada pantalla tiene su botón para preguntar con el contexto justo. la navegación se puede mover (izquierda, derecha, arriba, abajo), reducir a iconos u ocultar con `⌘B`, y se recuerda.
 
+### sin suscripción también sirve
+
+hilo detecta solo qué IA hay y usa la mejor: primero claude code o codex, y si no hay, un modelo que corre en tu propio equipo (apple intelligence en mac con chip m, que no pide descargar nada, u ollama en cualquier sistema). si no hay ninguno, busca en tus notas y en el grafo y sigue mostrando mi día, quién te frena y la revisión de formato, que no necesitan modelo. un modelo local es más modesto: redacta, resume y responde con tus datos, pero arreglar el ci y editar código siguen pidiendo claude code o codex. se ve y se cambia en ajustes › modelos.
+
 ### ahorro de tokens, medido
 
 ajustes › ahorro muestra dos cifras por separado: lo **gastado**, que cuenta la propia cli de claude code o codex al terminar cada paso, y lo **evitado**, que compara el texto crudo con el que hilo mandó (caracteres entre 4: es una estimación, no una factura). las técnicas: registros de ci reducidos al fallo, comentarios de revisión compactos con archivo y línea, diffs comprimidos, modelo ligero para redactar y el de desarrollo solo para editar, respuesta reutilizada si el paso es idéntico sobre el mismo commit, tope de gasto por paso y pasos que no usan modelo.

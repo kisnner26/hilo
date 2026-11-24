@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { UsoReal } from './Uso';
 import { api, type AhorroVista, type Conexion, type Config, type EstadoSesion, type Funcion, type InstalacionesVista, type ModeloAsignado, type PerfilVista, type ProgramadaVista, type Prueba } from '../lib/api';
 import { Actualizaciones } from './Actualizaciones';
+import { MotorIA } from './MotorIA';
 import { Conexiones } from './Conexiones';
 
 export type PestanaAjustes = 'cuentas' | 'modelos' | 'ahorro' | 'automatico' | 'actualizar' | 'diagnostico';
@@ -148,6 +149,7 @@ function TabModelos({ perfil, alCambiar }: { perfil: PerfilVista | null; alCambi
   };
   return (
     <div className="pestana">
+      <MotorIA />
       <section className="conexion">
         <header>
           <b>Suscripciones</b>

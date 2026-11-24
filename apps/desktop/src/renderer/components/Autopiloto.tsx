@@ -154,6 +154,11 @@ export function Autopiloto({ version }: { version: number }) {
             </button>
           )}
         </div>
+        {(plan.omitidos?.length ?? 0) > 0 && (
+          <p className="aviso-omitidos">
+            {plan.omitidos!.length} paso{plan.omitidos!.length === 1 ? '' : 's'} más {plan.omitidos!.length === 1 ? 'necesita' : 'necesitan'} un agente: {plan.omitidos![0]!.motivo}
+          </p>
+        )}
         {plan.pasos.length > 0 && (
           <>
             <button className="enlace" onClick={() => setVerPasos(!verPasos)}>

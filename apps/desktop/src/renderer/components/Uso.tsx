@@ -8,6 +8,7 @@ const TECNICAS: Record<string, string> = {
   'paso-local': 'Pasos resueltos sin modelo',
   'cache-de-paso': 'Pasos idénticos reutilizados',
   extracto: 'Notas recortadas',
+  'modelo-local': 'Preguntas resueltas en tu equipo',
 };
 
 const miles = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)} k` : String(n));

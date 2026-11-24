@@ -242,6 +242,8 @@ export interface ItemBandejaVista {
   enlace?: string;
 }
 export interface PlanAutoVista {
+  omitidos?: { id: string; titulo: string; motivo: string }[];
+  motor?: string;
   bloqueos: BloqueoVista[];
   culpables: CulpableVista[];
   pasos: PasoAutoVista[];
@@ -327,6 +329,24 @@ export interface EventoActualizar {
   total?: number;
   texto?: string;
   ultima?: string;
+}
+
+export type MotorId = 'claude' | 'codex' | 'apple' | 'ollama' | 'reglas';
+export interface MotorVista {
+  id: MotorId;
+  nombre: string;
+  disponible: boolean;
+  detalle: string;
+  ayuda?: string;
+  local: boolean;
+  puedeEditar: boolean;
+}
+export interface EstadoMotores {
+  lista: MotorVista[];
+  ollama: { activo: boolean; modelos: { nombre: string; bytes: number }[]; elegido?: string };
+  elegido: MotorId;
+  preferido: 'auto' | MotorId;
+  ollamaModelo?: string;
 }
 
 declare global {
@@ -446,6 +466,23 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
+  motorEstado: (forzar = false): Promise<EstadoMotores> =>
+    enElectron
+      ? inv('motor:estado', forzar)
+      : Promise.resolve({
+          lista: [
+            { id: 'claude', nombre: 'Claude Code', disponible: true, detalle: 'Plan max · sesión activa', local: false, puedeEditar: true },
+            { id: 'codex', nombre: 'Codex', disponible: false, detalle: 'No está instalado.', ayuda: 'Instálalo con npm i -g @openai/codex', local: false, puedeEditar: true },
+            { id: 'apple', nombre: 'Apple Intelligence', disponible: true, detalle: 'Corre en tu Mac, sin descargas ni suscripción.', local: true, puedeEditar: false },
+            { id: 'ollama', nombre: 'Ollama', disponible: false, detalle: 'Instalado, pero apagado.', ayuda: 'Abre la aplicación Ollama y vuelve a mirar.', local: true, puedeEditar: false },
+            { id: 'reglas', nombre: 'Sin IA (búsqueda y reglas)', disponible: true, detalle: 'Busca en tus notas y en el mapa del proyecto. No necesita nada.', local: true, puedeEditar: false },
+          ],
+          ollama: { activo: false, modelos: [] },
+          elegido: 'claude',
+          preferido: 'auto',
+        }),
+  motorFijar: (id: 'auto' | MotorId): Promise<void> => (enElectron ? inv('motor:fijar', id) : Promise.resolve()),
+  motorOllamaModelo: (m: string): Promise<void> => (enElectron ? inv('motor:ollama-modelo', m) : Promise.resolve()),
   versionApp: (): Promise<VersionVista> => (enElectron ? inv('actualizar:version') : Promise.resolve({ version: '0.1.3', empaquetada: true, plataforma: 'darwin', auto: true })),
   comprobarActualizacion: (): Promise<ActualizacionVista> =>
     enElectron

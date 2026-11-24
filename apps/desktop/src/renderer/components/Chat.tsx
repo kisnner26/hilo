@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type TarjetaVista } from '../lib/api';
+import { api, type EstadoMotores, type TarjetaVista } from '../lib/api';
 import { alPedirDictado, alPreguntarAlAgente, irASeccion, type PedidoAgente } from '../lib/agente';
 import { MENSAJE_ERROR, useDictado } from '../lib/useDictado';
 import { NOMBRE_IDIOMA, PanelVoz, SelectorIdioma } from './Voz';
@@ -30,6 +30,8 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
   const [ocupado, setOcupado] = useState(false);
   const [conv, setConv] = useState(() => `c${Date.now()}`);
   const fin = useRef<HTMLDivElement>(null);
+  const [motor, setMotor] = useState<EstadoMotores | null>(null);
+  useEffect(() => void api.motorEstado().then(setMotor).catch(() => undefined), []);
   const [autoEnvio, setAutoEnvio] = useState(() => {
     try {
       return localStorage.getItem('hilo.dictado-auto') !== 'no';
@@ -159,6 +161,11 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           <span className="chips-linea">
             {rol && <span className="dist">{rol}</span>}
             {saludo && <span className="dist">{saludo}</span>}
+            {motor && (
+              <button className={`dist chip-motor${motor.lista.find((m) => m.id === motor.elegido)?.local ? ' local' : ''}`} onClick={() => irASeccion('ajustes')} title="La IA que responde. Cámbiala en Ajustes › Modelos.">
+                {motor.lista.find((m) => m.id === motor.elegido)?.nombre ?? 'IA'}
+              </button>
+            )}
           </span>
         </div>
         <button className="boton secundario" onClick={nueva}>
