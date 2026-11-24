@@ -817,3 +817,26 @@ html:not(.cristal) body, body { background: radial-gradient(1000px 640px at 14% 
 .chip-motor { cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.07); color: var(--texto); }
 .chip-motor.local { border-color: rgba(61, 255, 136, 0.45); color: var(--verde); }
 .aviso-omitidos { margin: 8px 0 0; font-size: 12px; color: var(--suave); }
+
+/* ---------- Paneles del grafo: nada se corta aunque los nombres sean largos ---------- */
+.inspector-nodo, .guia-grafo, .paquete-fijado, .preguntar-nodo, .seccion-nodo { grid-template-columns: minmax(0, 1fr); }
+.inspector-nodo { overflow-x: hidden; overflow-y: auto; box-sizing: border-box; }
+.inspector-nodo *, .guia-grafo *, .paquete-fijado * { min-width: 0; }
+.inspector-nodo header strong { overflow-wrap: anywhere; }
+.inspector-nodo header > div { overflow: hidden; }
+.inspector-nodo .chips-linea { flex-wrap: wrap; }
+.inspector-nodo .dist { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ruta-nodo, .frase-nodo, .ahorro-nodo, .nota-pie, .seccion-nodo > .suave, .lista-nodos li, .ruta-pasos li { overflow-wrap: anywhere; word-break: break-word; }
+.ruta-nodo { white-space: normal; }
+.lista-nodos li { align-items: flex-start; }
+.lista-nodos .dist { flex-shrink: 0; }
+.seccion-nodo summary { gap: 10px; }
+.seccion-nodo summary span { overflow-wrap: anywhere; }
+.rejilla-acciones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.accion-nodo b, .accion-nodo span { overflow-wrap: anywhere; }
+.pie-nodo .boton { flex: 1 1 auto; white-space: normal; height: auto; min-height: 32px; padding: 6px 14px; }
+.chips-fijados { max-width: 100%; }
+.chip-fijado { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparacion strong { overflow-wrap: anywhere; }
+.guia-grafo li { align-items: flex-start; }
+@media (max-width: 900px) { .inspector-nodo, .guia-grafo { width: calc(100% - 32px); } .paquete-fijado { width: calc(100% - 32px); } }
