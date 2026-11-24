@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type TarjetaVista } from '../lib/api';
 import { alPedirDictado, alPreguntarAlAgente, irASeccion, type PedidoAgente } from '../lib/agente';
 import { MENSAJE_ERROR, useDictado } from '../lib/useDictado';
+import { NOMBRE_IDIOMA, PanelVoz, SelectorIdioma } from './Voz';
 import { mdAHtml } from '../lib/markdown';
 
 type Mensaje =
@@ -248,12 +249,12 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
         <div ref={fin} />
       </div>
 
-      {(dictado.fase !== 'inactivo' || dictado.error || (dictado.plataforma !== 'darwin' && dictado.plataforma !== '')) && (
+      {(dictado.fase !== 'inactivo' || dictado.error) && (
         <div className={`estado-voz${dictado.error ? ' con-error' : ''}`}>
           {dictado.error ? (
             <>
               <span>{MENSAJE_ERROR[dictado.error] ?? 'No se pudo dictar.'}</span>
-              {(dictado.error === 'permiso-microfono' || dictado.error === 'permiso-voz') && (
+              {(dictado.error === 'permiso-microfono' || dictado.error === 'permiso-voz' || dictado.error === 'sin-microfono') && (
                 <button className="enlace" onClick={() => void api.dictadoPermisos(dictado.error === 'permiso-voz' ? 'voz' : 'microfono')}>
                   Abrir los permisos del sistema
                 </button>
@@ -262,18 +263,26 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
                 Cerrar
               </button>
             </>
-          ) : dictado.fase !== 'inactivo' ? (
+          ) : (
             <>
               <span className="punto-voz" aria-hidden="true" />
-              <span>{dictado.fase === 'iniciando' ? 'Preparando el micrófono…' : dictado.fase === 'cerrando' ? 'Terminando…' : autoEnvio ? 'Te escucho. Cuando hagas una pausa larga, envío tu pregunta.' : 'Te escucho. Toca el micrófono para terminar.'}</span>
+              <span>
+                {dictado.fase === 'iniciando' ? 'Preparando el micrófono…' : dictado.fase === 'cerrando' ? 'Escribiendo lo que dijiste…' : autoEnvio ? 'Te escucho. Cuando hagas una pausa larga, envío tu pregunta.' : 'Te escucho. Toca el micrófono para terminar.'}
+                {dictado.detectado && dictado.idioma === 'auto' ? ` · ${NOMBRE_IDIOMA[dictado.detectado] ?? dictado.detectado}` : ''}
+              </span>
+              <SelectorIdioma valor={dictado.idioma} alCambiar={dictado.cambiarIdioma} motor={dictado.motor} />
               <label className="auto-voz">
                 <input type="checkbox" checked={autoEnvio} onChange={(e) => cambiarAuto(e.target.checked)} /> Enviar al terminar
               </label>
             </>
-          ) : (
-            <span>Para dictar en este sistema usa el dictado del propio sistema{dictado.plataforma === 'win32' ? ' (Win+H)' : ''} sobre el cuadro de texto.</span>
           )}
         </div>
+      )}
+      {dictado.fase === 'inactivo' && !dictado.error && dictado.plataforma !== '' && dictado.motor !== 'whisper' && (
+        <details className="mejorar-voz">
+          <summary>{dictado.motor === 'ninguno' ? 'Activar el dictado por voz' : 'Mejorar el dictado: inglés y español sin elegir'}</summary>
+          <PanelVoz estado={dictado.estado} refrescar={dictado.refrescar} />
+        </details>
       )}
       <form
         className="compositor"
@@ -298,6 +307,7 @@ export function Chat({ rol, saludo }: { rol?: string; saludo?: string }) {
           <button
             type="button"
             className={`microfono${dictado.fase !== 'inactivo' ? ' activo' : ''}`}
+            style={{ ['--nivel' as string]: dictado.nivel }}
             onClick={alternarMic}
             disabled={!dictado.disponible && dictado.plataforma === 'darwin'}
             title={dictado.fase !== 'inactivo' ? 'Terminar de dictar' : dictado.disponible ? 'Dictar con la voz' : dictado.plataforma === 'win32' ? 'Usa el dictado de Windows: Win+H' : 'El dictado por voz está en la versión de Mac'}

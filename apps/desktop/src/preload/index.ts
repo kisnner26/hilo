@@ -56,6 +56,8 @@ const CANALES = [
   'dictado:iniciar',
   'dictado:detener',
   'dictado:permisos',
+  'dictado:audio',
+  'dictado:descargar-modelo',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
@@ -83,6 +85,11 @@ contextBridge.exposeInMainWorld('hilo', {
     const f = (_: unknown, e: unknown) => cb(e);
     ipcRenderer.on('dictado:evento', f);
     return () => ipcRenderer.off('dictado:evento', f);
+  },
+  alDescarga: (cb: (e: unknown) => void) => {
+    const f = (_: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('dictado:descarga', f);
+    return () => ipcRenderer.off('dictado:descarga', f);
   },
   alCodigo: (cb: (e: unknown) => void) => {
     const f = (_: unknown, e: unknown) => cb(e);

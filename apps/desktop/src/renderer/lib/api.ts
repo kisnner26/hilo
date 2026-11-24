@@ -272,15 +272,26 @@ export interface UsoVista {
 }
 
 export interface EventoDictado {
-  tipo: 'parcial' | 'final' | 'estado' | 'error' | 'cerrado';
+  tipo: 'parcial' | 'final' | 'estado' | 'error' | 'cerrado' | 'idioma';
   texto?: string;
   estado?: string;
   codigo?: string;
+  motor?: 'whisper' | 'apple';
+  idioma?: string;
 }
+export type IdiomaVoz = 'auto' | 'es' | 'en';
 export interface EstadoDictado {
+  motor: 'whisper' | 'apple' | 'ninguno';
   disponible: boolean;
   plataforma: string;
   escuchando: boolean;
+  whisper: { herramienta: boolean; modelo: boolean; archivoModelo: string };
+}
+export interface DescargaVoz {
+  bajados?: number;
+  total?: number;
+  listo?: boolean;
+  error?: string;
 }
 
 /** En la demostración (navegador) se simula el dictado para poder ver cómo se siente. */
@@ -296,7 +307,7 @@ function dictadoDemo() {
 
 declare global {
   interface Window {
-    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void; alDictado: (cb: (e: unknown) => void) => () => void };
+    hilo?: { plataforma?: string; invocar: (canal: string, ...args: unknown[]) => Promise<unknown>; alEvento: (cb: (e: unknown) => void) => () => void; alCodigo: (cb: (e: unknown) => void) => () => void; alChat: (cb: (e: unknown) => void) => () => void; alAuto: (cb: (e: unknown) => void) => () => void; alDictado: (cb: (e: unknown) => void) => () => void; alDescarga: (cb: (e: unknown) => void) => () => void };
   }
 }
 
@@ -411,8 +422,8 @@ function chatDemo(p: { conv: string; texto?: string; tarea?: { accion: string; r
 }
 
 export const api = {
-  dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ disponible: true, plataforma: 'darwin', escuchando: false })),
-  dictadoIniciar: (idioma: string): Promise<void> => {
+  dictadoEstado: (): Promise<EstadoDictado> => (enElectron ? inv('dictado:estado') : Promise.resolve({ motor: 'apple', disponible: true, plataforma: 'darwin', escuchando: false, whisper: { herramienta: true, modelo: false, archivoModelo: 'ggml-small-q5_1.bin' } })),
+  dictadoIniciar: (idioma: IdiomaVoz): Promise<void> => {
     if (enElectron) return inv('dictado:iniciar', idioma);
     dictadoDemo();
     return Promise.resolve();
@@ -424,6 +435,9 @@ export const api = {
     emitirDemo({ tipo: 'cerrado' });
     return Promise.resolve();
   },
+  dictadoAudio: (bytes: Uint8Array): Promise<void> => (enElectron ? inv('dictado:audio', bytes) : Promise.resolve()),
+  dictadoDescargarModelo: (): Promise<{ ok: boolean }> => (enElectron ? inv('dictado:descargar-modelo') : Promise.resolve({ ok: false })),
+  alDescarga: (cb: (e: DescargaVoz) => void): (() => void) => (enElectron ? window.hilo!.alDescarga((e) => cb(e as DescargaVoz)) : () => {}),
   dictadoPermisos: (cual: 'microfono' | 'voz'): Promise<void> => (enElectron ? inv('dictado:permisos', cual) : Promise.resolve()),
   alDictado: (cb: (e: EventoDictado) => void): (() => void) => {
     if (enElectron) return window.hilo!.alDictado((e) => cb(e as EventoDictado));
