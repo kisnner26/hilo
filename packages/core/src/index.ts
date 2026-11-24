@@ -18,3 +18,5 @@ export * from './ahorro.js';
 export * from './chat.js';
 export * from './ahorro-config.js';
 export * from './bloqueos.js';
+export * from './digestos.js';
+export * from './uso.js';
