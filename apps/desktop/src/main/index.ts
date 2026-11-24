@@ -693,11 +693,22 @@ async function revisarCola(): Promise<RevisionPr[]> {
   const yo = await gh.api.yo();
   const prs = (await gh.api.prsAbiertos(repo, yo.login)).filter((p) => !p.borrador && p.autor !== yo.login);
   const salida: RevisionPr[] = [];
+  // Custodio de migraciones: lo ya fusionado en main sirve para saber si la versión de un PR llega tarde.
+  const carpetaMig = perfil.archivos.migraciones.carpeta;
+  const enMain = await gh.api.nombresEnCarpeta(repo, carpetaMig).then((n) => n.filter((x) => x.endsWith('.sql'))).catch(() => [] as string[]);
+  const patronMig = new RegExp(perfil.archivos.migraciones.nombre);
   await core.correrSubagentes(prs, 4, async (p) => {
     const clave = `${repo}#${p.numero}:${p.sha ?? ''}`;
     let r: RevisionPr | undefined = p.sha ? cacheRevision.get(clave) : undefined;
     if (!r) {
-      const inf = core.informe(await gh.api.cambioDePr(repo, p.numero), perfil);
+      const cambio = await gh.api.cambioDePr(repo, p.numero);
+      const inf = core.informe(cambio, perfil);
+      const nombresMig = cambio.archivos.filter((a) => a.estado === 'A' && a.ruta.startsWith(`${carpetaMig}/`) && a.ruta.endsWith('.sql')).map((a) => a.ruta.split('/').pop()!);
+      // El formato del nombre ya lo revisa `informe`; aquí se suma lo que depende de main: versión tardía, repetida o módulo inexistente.
+      const migraciones = core
+        .custodiarMigraciones(enMain, [{ pr: p.numero, nombres: nombresMig }], patronMig)
+        .filter((m) => !m.problema.startsWith('el nombre no cumple'))
+        .map((m) => ({ gravedad: 'ERROR' as const, regla: 'migraciones-orden', mensaje: `${m.nombre}: ${m.problema}.`, ...(m.nuevoNombre ? { arreglo: `Renómbrala a ${m.nuevoNombre}` } : {}) }));
       r = {
         numero: p.numero,
         titulo: p.titulo,
@@ -705,14 +716,15 @@ async function revisarCola(): Promise<RevisionPr[]> {
         url: p.url,
         ci: p.ci,
         lineas: inf.lineas,
-        errores: inf.errores.length,
+        errores: inf.errores.length + migraciones.length,
         avisos: inf.avisos.length,
         ...(p.sha ? { sha: p.sha } : {}),
         hallazgos: [
+          ...migraciones,
           ...inf.errores.map((h) => ({ gravedad: 'ERROR' as const, regla: h.regla, mensaje: h.mensaje, ...(h.arreglo ? { arreglo: h.arreglo } : {}) })),
           ...inf.avisos.map((h) => ({ gravedad: 'AVISO' as const, regla: h.regla, mensaje: h.mensaje, ...(h.arreglo ? { arreglo: h.arreglo } : {}) })),
         ],
-        comentario: core.comentarioDeRevision(p.numero, inf),
+        comentario: `${core.comentarioDeRevision(p.numero, inf)}${migraciones.length ? `\n\nMigraciones (custodio):\n${migraciones.map((m) => `- ${m.mensaje}${m.arreglo ? ` ${m.arreglo}.` : ''}`).join('\n')}` : ''}`,
       };
       if (p.sha) cacheRevision.set(clave, r);
     }
