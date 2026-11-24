@@ -39,6 +39,8 @@ export interface EjecucionSpec {
   presupuestoUsd?: number;
   /** Paso suelto: no deja sesión guardada. */
   sinSesion?: boolean;
+  /** Para cancelar el paso en curso. */
+  senal?: AbortSignal;
   /** Conversación continuada: la primera vez crea la sesión y las siguientes la reanudan, sin reenviar el historial. */
   sesion?: { id: string; reanudar: boolean };
   /** Recibe el texto mientras se escribe. */
@@ -169,7 +171,7 @@ export function ejecutar(s: EjecucionSpec, alEvento?: (linea: string) => void): 
   const args = cli === 'claude' ? argumentosClaude(s) : argumentosCodex(s);
   const inicio = Date.now();
   return new Promise((resolver, rechazar) => {
-    const p = spawn(cli, args, { cwd: s.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const p = spawn(cli, args, { cwd: s.cwd, stdio: ['pipe', 'pipe', 'pipe'], ...(s.senal ? { signal: s.senal } : {}) });
     let restos = '';
     let texto = '';
     let eventos = 0;

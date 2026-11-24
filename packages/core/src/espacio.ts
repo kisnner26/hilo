@@ -32,7 +32,10 @@ export async function crearEspacio(proyecto: string, rama: string, base: string,
   const dir = join(carpetaTrabajo, sinBarras(rama));
   if (existsSync(join(dir, '.git'))) return { dir, rama, base, reutilizado: true };
   await git(proyecto, ['fetch', 'origin', base]).catch(() => '');
-  const origen = await git(proyecto, ['rev-parse', '--verify', '--quiet', `origin/${base}`]).then(() => `origin/${base}`, () => base);
+  // Si la rama ya existe en tu bifurcación (un PR abierto), se parte de ella; si no, de la base.
+  await git(proyecto, ['fetch', 'origin', rama]).catch(() => '');
+  const conRama = await git(proyecto, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${rama}`]).then(() => `origin/${rama}`, () => undefined);
+  const origen = conRama ?? (await git(proyecto, ['rev-parse', '--verify', '--quiet', `origin/${base}`]).then(() => `origin/${base}`, () => base));
   const existe = await git(proyecto, ['rev-parse', '--verify', '--quiet', `refs/heads/${rama}`]).then(() => true, () => false);
   await git(proyecto, existe ? ['worktree', 'add', dir, rama] : ['worktree', 'add', '-b', rama, dir, origen]);
   return { dir, rama, base, reutilizado: existe };
