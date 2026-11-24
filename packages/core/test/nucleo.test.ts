@@ -230,3 +230,26 @@ describe('agentes por suscripción', () => {
     expect(textoDeEvento('claude', 'no json')).toBeUndefined();
   });
 });
+
+describe('agente de escritura', () => {
+  const base = { asignado: { cli: 'claude' as const, modelo: 'claude-sonnet-5-5', esfuerzo: 'low' as const }, prompt: 'x', cwd: '.' };
+  it('edita y prueba, pero nunca publica ni borra', () => {
+    const a = argumentosClaude({ ...base, escritura: true, presupuestoUsd: 0.5 });
+    expect(a).toEqual(expect.arrayContaining(['--permission-mode', 'acceptEdits', '--allowedTools', '--disallowedTools', '--max-budget-usd', '0.5']));
+    expect(a).toContain('Bash(git push:*)');
+    expect(a.indexOf('--disallowedTools')).toBeGreaterThan(a.indexOf('--allowedTools'));
+    expect(a.slice(a.indexOf('--allowedTools'), a.indexOf('--disallowedTools'))).not.toContain('Bash(git push:*)');
+  });
+  it('solo lectura gana sobre escritura', () => {
+    const a = argumentosClaude({ ...base, escritura: true, soloLectura: true });
+    expect(a).toContain('plan');
+    expect(a).not.toContain('acceptEdits');
+  });
+  it('un paso suelto no deja sesión guardada', () => {
+    expect(argumentosClaude({ ...base, sinSesion: true })).toContain('--no-session-persistence');
+    expect(argumentosClaude({ ...base, sinSesion: true, sesion: { id: 'u', reanudar: false } })).not.toContain('--no-session-persistence');
+  });
+  it('Codex usa su caja de escritura del espacio de trabajo', () => {
+    expect(argumentosCodex({ asignado: { cli: 'codex', modelo: 'gpt-5', esfuerzo: 'low' }, prompt: 'x', cwd: '.', escritura: true })).toEqual(expect.arrayContaining(['--sandbox', 'workspace-write']));
+  });
+});

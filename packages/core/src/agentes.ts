@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { CliId, Esfuerzo, ModeloAsignado, Perfil, RolId } from './profile.js';
+import { usoDeLinea, type UsoAgente } from './uso.js';
 
 const exec = promisify(execFile);
 
@@ -32,11 +33,22 @@ export interface EjecucionSpec {
   cwd: string;
   /** "plan" no modifica archivos. */
   soloLectura?: boolean;
+  /** El agente puede editar archivos y correr solo las herramientas permitidas. Nunca publica: sin push ni borrados. */
+  escritura?: boolean;
+  /** Tope de gasto de un paso en dólares (solo Claude Code). */
+  presupuestoUsd?: number;
+  /** Paso suelto: no deja sesión guardada. */
+  sinSesion?: boolean;
   /** Conversación continuada: la primera vez crea la sesión y las siguientes la reanudan, sin reenviar el historial. */
   sesion?: { id: string; reanudar: boolean };
   /** Recibe el texto mientras se escribe. */
   alTexto?: (delta: string) => void;
 }
+
+/** Lo único que un agente de escritura puede ejecutar: leer, editar, probar y guardar commits locales. */
+export const HERRAMIENTAS_ESCRITURA = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git log:*)', 'Bash(mvn:*)', 'Bash(npm:*)', 'Bash(npx:*)'];
+/** Lo que jamás puede hacer sin una persona: publicar, borrar o salir a la red. */
+export const HERRAMIENTAS_PROHIBIDAS = ['Bash(git push:*)', 'Bash(git reset:*)', 'Bash(git clean:*)', 'Bash(git checkout:*)', 'Bash(rm:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(gh:*)', 'Bash(sudo:*)'];
 
 export function argumentosClaude(s: EjecucionSpec): string[] {
   return [
@@ -50,6 +62,9 @@ export function argumentosClaude(s: EjecucionSpec): string[] {
     '--verbose',
     ...(s.sistema ? ['--append-system-prompt', s.sistema] : []),
     ...(s.soloLectura ? ['--permission-mode', 'plan'] : []),
+    ...(!s.soloLectura && s.escritura ? ['--permission-mode', 'acceptEdits', '--allowedTools', ...HERRAMIENTAS_ESCRITURA, '--disallowedTools', ...HERRAMIENTAS_PROHIBIDAS] : []),
+    ...(s.presupuestoUsd ? ['--max-budget-usd', String(s.presupuestoUsd)] : []),
+    ...(s.sinSesion && !s.sesion ? ['--no-session-persistence'] : []),
     ...(s.sesion ? (s.sesion.reanudar ? ['--resume', s.sesion.id] : ['--session-id', s.sesion.id]) : []),
     ...(s.alTexto ? ['--include-partial-messages'] : []),
   ];
@@ -63,7 +78,7 @@ export function argumentosCodex(s: EjecucionSpec): string[] {
     ...(s.asignado.modelo ? ['--model', s.asignado.modelo] : []),
     '-c',
     `model_reasoning_effort="${esfuerzoCodex(s.asignado.esfuerzo)}"`,
-    ...(s.soloLectura ? ['--sandbox', 'read-only'] : []),
+    ...(s.soloLectura ? ['--sandbox', 'read-only'] : s.escritura ? ['--sandbox', 'workspace-write'] : []),
     '-',
   ];
 }
@@ -121,6 +136,8 @@ export interface Resultado {
   codigoSalida: number;
   duracionMs: number;
   eventos: number;
+  /** Lo que la propia CLI informó haber gastado en este paso. */
+  uso?: UsoAgente;
 }
 
 /** Texto final de una línea de salida JSON de Claude Code o Codex, si la línea lo trae. */
@@ -156,6 +173,7 @@ export function ejecutar(s: EjecucionSpec, alEvento?: (linea: string) => void): 
     let restos = '';
     let texto = '';
     let eventos = 0;
+    let uso: UsoAgente | undefined;
     p.stdout.on('data', (d: Buffer) => {
       restos += d.toString('utf8');
       const lineas = restos.split('\n');
@@ -169,10 +187,11 @@ export function ejecutar(s: EjecucionSpec, alEvento?: (linea: string) => void): 
           if (d) s.alTexto(d);
         }
         texto = textoDeEvento(cli, l) ?? texto;
+        uso = usoDeLinea(cli, l) ?? uso;
       }
     });
     p.on('error', rechazar);
-    p.on('close', (c) => resolver({ texto, codigoSalida: c ?? 1, duracionMs: Date.now() - inicio, eventos }));
+    p.on('close', (c) => resolver({ texto, codigoSalida: c ?? 1, duracionMs: Date.now() - inicio, eventos, ...(uso ? { uso } : {}) }));
     p.stdin.end(s.prompt);
   });
 }
