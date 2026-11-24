@@ -28,3 +28,4 @@ export * from './audio.js';
 export * from './actualizar.js';
 export * from './motor.js';
 export * from './migraciones.js';
+export * from './adjuntos.js';
