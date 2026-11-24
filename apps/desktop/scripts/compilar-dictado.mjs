@@ -1,4 +1,4 @@
-// Compila los ayudantes nativos de macOS: dictado por voz y la IA local de Apple Intelligence.
+// Compila los ayudantes nativos de macOS: dictado por voz, IA local de Apple Intelligence y lectura de imágenes y PDF.
 // En otros sistemas no hace nada: allí se usa el dictado del sistema y, para IA local, Ollama.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -10,6 +10,7 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const AYUDANTES = [
   { fuente: 'dictado.swift', salida: 'hilo-dictado', marcos: ['Speech', 'AVFoundation'] },
   { fuente: 'hilo-ia.swift', salida: 'hilo-ia', marcos: ['FoundationModels'] },
+  { fuente: 'hilo-ocr.swift', salida: 'hilo-ocr', marcos: ['Vision', 'PDFKit', 'AppKit'] },
 ];
 mkdirSync(join(raiz, 'native/bin'), { recursive: true });
 for (const a of AYUDANTES) {
