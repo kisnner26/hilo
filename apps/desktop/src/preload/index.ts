@@ -45,6 +45,13 @@ const CANALES = [
   'programadas:lista',
   'programadas:guardar',
   'programadas:ejecutar',
+  'auto:plan',
+  'auto:bandeja',
+  'auto:cancelar',
+  'auto:descartar',
+  'auto:correr',
+  'auto:publicar',
+  'uso:resumen',
 ] as const;
 
 contextBridge.exposeInMainWorld('hilo', {
@@ -62,6 +69,11 @@ contextBridge.exposeInMainWorld('hilo', {
     const f = (_: unknown, e: unknown) => cb(e);
     ipcRenderer.on('chat:evento', f);
     return () => ipcRenderer.off('chat:evento', f);
+  },
+  alAuto: (cb: (e: unknown) => void) => {
+    const f = (_: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('auto:evento', f);
+    return () => ipcRenderer.off('auto:evento', f);
   },
   alCodigo: (cb: (e: unknown) => void) => {
     const f = (_: unknown, e: unknown) => cb(e);

@@ -7,8 +7,9 @@ import { promisify } from 'node:util';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import * as core from '@hilo/core';
+import { registrarAutopiloto, registrarUso } from './autopiloto';
 
-type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola';
+type TipoProgramada = 'avisos' | 'resumen-dia' | 'revisar-prs' | 'informe-cola' | 'autopiloto';
 interface Programada {
   id: TipoProgramada;
   activo: boolean;
@@ -370,6 +371,7 @@ interface Conversacion {
 }
 const conversaciones = new Map<string, Conversacion>();
 let diaCache: { hasta: number; dia: core.MiDia } | undefined;
+let calculoCache: { hasta: number; r: Awaited<ReturnType<typeof calcularMiDia>> } | undefined;
 
 async function diaCacheado(forzar = false): Promise<core.MiDia> {
   if (!forzar && diaCache && diaCache.hasta > Date.now()) return diaCache.dia;
@@ -402,6 +404,7 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
       }
     }
 
+    const evitadosChat: core.Evitado[] = [];
     let conv = conversaciones.get(p.conv);
     if (!conv) {
       conv = { sesion: randomUUID(), creada: false };
@@ -427,6 +430,7 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
           informe = core.formatearInforme(core.informe(await gh.api.cambioDePr(repo, pr.numero), perfil));
           const crudo = await gh.api.diff(repo, pr.numero, ah.maxLineasDiff).catch(() => undefined);
           diff = crudo && ah.comprimirLogs ? core.comprimirSalida(crudo, ah.maxLineasDiff) : crudo;
+          if (crudo && diff && ah.comprimirLogs) evitadosChat.push(core.evitado('diff', crudo, diff));
         }
       }
       prompt = core.promptTarea(accion, ref, detalle, pr, informe, diff);
@@ -455,6 +459,7 @@ async function turnoDeChat(p: PedidoChat): Promise<void> {
       return;
     }
     conv.creada = true;
+    registrarUso({ fecha: new Date().toISOString(), paso: p.tarea ? `chat-${p.tarea.accion}` : 'chat', ref: p.tarea?.ref ?? '-', modelo: `${asignado.modelo} · ${asignado.esfuerzo}`, ms: r.duracionMs, ...(r.uso ? { uso: r.uso } : {}), evitados: evitadosChat });
     emitir({ tipo: 'fin', texto: r.texto, ms: r.duracionMs });
   } catch (e) {
     emitir({ tipo: 'error', texto: core.errorLegible(e, 'claude') });
@@ -540,7 +545,7 @@ const repoActivo = (): string => {
   return c.repo ?? c.repos?.[0] ?? `${p.repo.owner}/${p.repo.name}`;
 };
 
-async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: string[] }> {
+async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: string[]; bruto: { tareas: core.TareaClickup[]; prs: core.PrResumen[]; yo: core.Identidad } }> {
   const perfil = perfilActual();
   const repo = repoActivo();
   const avisosDeConexion: string[] = [];
@@ -580,7 +585,7 @@ async function calcularMiDia(): Promise<{ dia: core.MiDia; avisosDeConexion: str
       avisosDeConexion.push(`GitHub (${repo}): ${core.errorLegible(e)}`);
     }
   }
-  return { dia: core.miDia(tareas, prs, yo, perfil, new Date(), leerConfig().rol), avisosDeConexion };
+  return { dia: core.miDia(tareas, prs, yo, perfil, new Date(), leerConfig().rol), avisosDeConexion, bruto: { tareas, prs, yo } };
 }
 
 let vistas = new Set<string>();
@@ -678,6 +683,7 @@ const PROGRAMADAS_BASE: Programada[] = [
   { id: 'resumen-dia', activo: false, hora: '09:00' },
   { id: 'revisar-prs', activo: false, cadaMin: 15 },
   { id: 'informe-cola', activo: false, hora: '17:00' },
+  { id: 'autopiloto', activo: false, hora: '08:30' },
 ];
 
 function programadas(): Programada[] {
@@ -689,9 +695,11 @@ function programadas(): Programada[] {
 }
 
 let reportadosRevision = new Set<string>();
+let prepararAutopiloto: () => Promise<string> = async () => 'No disponible';
 
 async function ejecutarProgramada(p: Programada): Promise<string> {
   if (p.id === 'avisos') return ejecutarAvisos();
+  if (p.id === 'autopiloto') return prepararAutopiloto();
   if (p.id === 'resumen-dia') {
     const { dia } = await calcularMiDia();
     const texto = `${dia.tareas.length} tarea${dia.tareas.length === 1 ? '' : 's'}, ${dia.prs.length} PR tuyo${dia.prs.length === 1 ? '' : 's'} y ${dia.acciones.filter((a) => a.prioridad <= 3).length} urgente(s).${dia.acciones[0] ? ` Primero: ${dia.acciones[0].texto}` : ''}`;
@@ -877,6 +885,25 @@ void app.whenReady().then(() => {
   registrarIpc();
   registrarIpcExtra();
   registrarIpcConexiones();
+  const auto = registrarAutopiloto({
+    config: () => leerConfig(),
+    perfil: perfilActual,
+    repo: repoActivo,
+    github,
+    clickup,
+    calcular: async (forzar) => {
+      if (!forzar && calculoCache && calculoCache.hasta > Date.now()) return calculoCache.r;
+      const r = await calcularMiDia();
+      calculoCache = { hasta: Date.now() + 60_000, r };
+      diaCache = { hasta: Date.now() + 90_000, dia: r.dia };
+      return r;
+    },
+    enviar,
+    confirmar: confirmarPublicacion,
+    avisar,
+    raizDatos,
+  });
+  prepararAutopiloto = auto.prepararSinTokens;
   setInterval(() => void tickProgramadas(), 60_000);
   setTimeout(() => void tickProgramadas(), 20_000);
   crearVentana();
