@@ -13,6 +13,7 @@ app de escritorio que junta tu clickup y tu github y te dice qué te toca hoy, q
 - **piloto automático:** «hacer mis pendientes» prepara tu día. lo que no necesita modelo sale gratis y nada llega a otras personas sin tu aprobación.
 - **revisión de pr:** una sola lista de correcciones según el formato acordado, antes de pedir revisión. los integradores ven toda la cola, con las migraciones.
 - **asistente con voz:** pregunta escribiendo o hablando, en español o inglés. `⌘K` lo abre desde cualquier pantalla.
+- **adjuntos:** arrastra o pega imágenes, pdf, word, excel, tablas, código o cualquier archivo en el asistente. hilo lee en tu equipo lo que puede (texto de imágenes y pdf, tablas resumidas) y manda al agente solo eso o la imagen reducida; cada adjunto muestra cuántos tokens ahorró.
 - **grafo útil:** qué usa un archivo, qué lo usa y qué se rompe si lo cambias. el agente recibe solo ese contexto.
 - **ahorro de tokens medido:** lo gastado de verdad frente a lo que se evitó mandar.
 
@@ -60,12 +61,12 @@ un modelo local es más modesto: redacta, resume y responde con tus datos. edita
 
 ## ahorro de tokens
 
-hilo manda al agente solo lo necesario: resumen del proyecto en vez del proyecto entero, vecindad de un nodo, registros de ci reducidos al fallo, comentarios de revisión con archivo y línea, diffs comprimidos, modelo ligero para redactar y uno fuerte solo para editar, y la misma respuesta reutilizada si el paso es idéntico sobre el mismo commit. ajustes › ahorro muestra lo **gastado** (lo cuenta la cli del agente) y lo **evitado** (caracteres entre 4: una estimación, no una factura).
+hilo manda al agente solo lo necesario: resumen del proyecto en vez del proyecto entero, vecindad de un nodo, registros de ci reducidos al fallo, comentarios de revisión con archivo y línea, diffs comprimidos, modelo ligero para redactar y uno fuerte solo para editar, la misma respuesta reutilizada si el paso es idéntico sobre el mismo commit, y contexto mínimo del agente (≈10 mil tokens por consulta en vez de ≈69 mil en nuestras mediciones). ajustes › ahorro muestra lo **gastado** (lo cuenta la cli del agente) y lo **evitado** (caracteres entre 4: una estimación, no una factura).
 
 ## seguridad
 
 - nada se publica sin que lo apruebes: comentarios, ramas y pr se confirman en un cuadro con el resumen.
-- los agentes que editan código trabajan en una copia aislada (git worktree) con herramientas acotadas: leer, editar, probar y guardar commits locales. sin push, sin borrar, sin red.
+- el agente tiene tres niveles de permisos en ajustes › modelos: **lectura**, **trabajo** (por defecto: lee github, edita y prueba en una copia aislada, guarda commits locales; sin push, sin borrar, sin red) y **total** (sin límites, como correr `claude --dangerously-skip-permissions`; solo si lo activas tú).
 - hilo no guarda claves de api: lanza `claude` y `codex` como procesos y cada persona entra con su cuenta.
 
 ## desarrollo
