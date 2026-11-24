@@ -17,6 +17,12 @@ export interface AjustesAhorro {
   sesionContinua: boolean;
   /** Responder con datos locales las preguntas simples, sin gastar tokens. */
   respuestasInmediatas: boolean;
+  /** Redactar con un modelo ligero y editar código con el de desarrollo. */
+  modeloEscalonado: boolean;
+  /** No volver a pagar un paso idéntico sobre el mismo commit. */
+  cachePasos: boolean;
+  /** Tope de gasto de un paso pesado del autopiloto, en dólares. */
+  topeUsdPaso: number;
   presupuesto: number;
   maxSubagentes: number;
   maxLineasDiff: number;
@@ -34,6 +40,9 @@ const BASE: AjustesAhorro = {
   comprimirLogs: true,
   sesionContinua: true,
   respuestasInmediatas: true,
+  modeloEscalonado: true,
+  cachePasos: true,
+  topeUsdPaso: 1.5,
   presupuesto: 1500,
   maxSubagentes: 5,
   maxLineasDiff: 300,
@@ -41,8 +50,8 @@ const BASE: AjustesAhorro = {
 };
 
 export function presetAhorro(p: PresetAhorro): AjustesAhorro {
-  if (p === 'maximo') return { ...BASE, presupuesto: 800, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 };
-  if (p === 'libre') return { ...BASE, activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 };
+  if (p === 'maximo') return { ...BASE, presupuesto: 800, topeUsdPaso: 0.8, maxSubagentes: 3, maxLineasDiff: 150, maxCaracteresNota: 600 };
+  if (p === 'libre') return { ...BASE, activo: false, resumen: false, alcance: false, extractos: false, estiloBreve: false, comprimirLogs: false, modeloEscalonado: false, topeUsdPaso: 6, presupuesto: 6000, maxSubagentes: 6, maxLineasDiff: 800, maxCaracteresNota: 3000 };
   return { ...BASE };
 }
 
@@ -65,5 +74,7 @@ export const TECNICAS_AHORRO: { clave: keyof AjustesAhorro; nombre: string; deta
   { clave: 'estiloBreve', nombre: 'Respuestas breves', detalle: 'Sin preámbulos en código y pruebas.' },
   { clave: 'comprimirLogs', nombre: 'Logs y diffs comprimidos', detalle: 'Quita ruido antes de enviar.' },
   { clave: 'sesionContinua', nombre: 'Conversación continuada', detalle: 'No reenvía el historial. Apagado, cada pregunta empieza de cero.' },
+  { clave: 'modeloEscalonado', nombre: 'Modelo según el paso', detalle: 'Redactar usa uno ligero; editar código, el de desarrollo.' },
+  { clave: 'cachePasos', nombre: 'No pagar dos veces', detalle: 'Un paso idéntico sobre el mismo commit reutiliza su respuesta.' },
   { clave: 'respuestasInmediatas', nombre: 'Respuestas locales', detalle: '«¿Qué tarea tengo?» se responde sin modelo.' },
 ];
