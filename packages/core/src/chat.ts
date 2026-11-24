@@ -1,5 +1,7 @@
 import { extractoRelevante } from './ahorro.js';
 import { quienMeBloquea, type Bloqueo } from './bloqueos.js';
+import { buscarNodos, type GrafoG } from './analisis-grafo.js';
+import { buscarNotas, type Nota } from './context.js';
 import type { TareaClickup } from './clickup.js';
 import type { MiDia, PrResumen } from './midia.js';
 import type { Perfil } from './profile.js';
@@ -156,4 +158,27 @@ export function promptTarea(accion: AccionTarea, codigo: string, detalle: Detall
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+/**
+ * Respuesta sin ninguna IA: busca en las notas y en el grafo y muestra lo que encontró.
+ * Es lo que ve alguien que no tiene un agente ni un modelo local: poco, pero útil y sin gastar nada.
+ */
+export function respuestaSinIa(texto: string, notas: Nota[], grafo: GrafoG): RespuestaInmediata {
+  const enNotas = buscarNotas(notas, texto, 3);
+  const palabras = [...new Set(texto.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3))].sort((a, b) => b.length - a.length).slice(0, 4);
+  const vistos = new Set<string>();
+  const enGrafo = palabras.flatMap((w) => buscarNodos(grafo, w, 5)).filter((n) => !vistos.has(n.id) && vistos.add(n.id)).slice(0, 5);
+  const partes: string[] = [];
+  if (enNotas.length > 0) {
+    partes.push('Esto encontré en las notas del proyecto:');
+    for (const x of enNotas) partes.push(`- **${x.nota.titulo}** (${x.nota.ruta})\n  ${extractoRelevante(x.nota.texto, texto, 320).replace(/\n+/g, ' ')}`);
+  }
+  if (enGrafo.length > 0) {
+    partes.push(`${partes.length ? '\n' : ''}Y esto en el mapa del proyecto:`);
+    for (const n of enGrafo) partes.push(`- ${n.label}${n.archivo ? ` (${n.archivo})` : ''}`);
+  }
+  if (partes.length === 0) partes.push('No encontré nada sobre eso en las notas ni en el mapa del proyecto.');
+  partes.push('\n_No hay un modelo de IA activo, así que solo puedo buscar. Para que redacte y explique, conecta Claude Code o Codex, o activa un modelo en tu equipo en Ajustes › Modelos._');
+  return { texto: partes.join('\n'), tarjetas: [] };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { argumentosClaude, cargarPerfil, deltaDeEvento, detectarIntencion, miDia, promptSistemaChat, promptTarea, respuestaDeIntencion, type PrResumen, type TareaClickup } from '../src/index.js';
+import { argumentosClaude, cargarPerfil, deltaDeEvento, detectarIntencion, miDia, promptSistemaChat, promptTarea, respuestaDeIntencion, respuestaSinIa, type PrResumen, type TareaClickup } from '../src/index.js';
 
 const perfil = cargarPerfil(join(import.meta.dirname, '../../../profiles/sistema-evaluaciones.json'));
 const ahora = new Date('2026-11-23T15:00:00Z');
@@ -90,5 +90,22 @@ describe('intenciones del piloto y de los bloqueos', () => {
     expect(r.texto).toContain('**luis** frena X-1');
     expect(r.accion).toBe('piloto');
     expect(respuestaDeIntencion('quien-bloquea', dia, { bloqueos: [] }).texto).toContain('Nadie te frena');
+  });
+});
+
+describe('respuesta sin IA', () => {
+  const notas = [
+    { ruta: 'docs/baremos.md', titulo: 'Baremos BFA', texto: 'Los baremos se aprueban con evidencia.\n\nLa conversión a percentil usa coincidencia exacta de rango.', carpeta: 'docs' },
+    { ruta: 'docs/otra.md', titulo: 'Otra nota', texto: 'Nada que ver con esto.', carpeta: 'docs' },
+  ] as never;
+  const grafo = { nodos: [{ id: 'a', label: 'ConversionPercentilService', archivo: 'src/ConversionPercentilService.java' }], enlaces: [] };
+  it('busca en las notas y en el grafo y avisa que no hay modelo', () => {
+    const r = respuestaSinIa('cómo se convierte a percentil', notas, grafo);
+    expect(r.texto).toContain('Baremos BFA');
+    expect(r.texto).toContain('ConversionPercentilService');
+    expect(r.texto).toContain('No hay un modelo de IA activo');
+  });
+  it('dice con honestidad cuando no encuentra nada', () => {
+    expect(respuestaSinIa('zzzz qqqq', notas, grafo).texto).toContain('No encontré nada');
   });
 });
