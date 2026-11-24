@@ -11,6 +11,7 @@ let proyecto: string;
 let trabajo: string;
 
 beforeAll(() => {
+  if (process.platform === 'win32') return;
   const raiz = mkdtempSync(join(tmpdir(), 'hilo-espacio-'));
   proyecto = join(raiz, 'repo');
   trabajo = join(raiz, 'trabajo');
@@ -21,7 +22,7 @@ beforeAll(() => {
   g(proyecto, 'commit', '-q', '-m', 'base');
 });
 
-describe('espacio de trabajo aislado', () => {
+describe.runIf(process.platform !== 'win32')('espacio de trabajo aislado', () => {
   it('crea una rama y una copia aparte sin tocar la carpeta original', async () => {
     const e = await crearEspacio(proyecto, 'feature/ana-GEN-01-BE', 'main', trabajo);
     expect(e.reutilizado).toBe(false);
@@ -61,7 +62,7 @@ describe('espacio de trabajo aislado', () => {
   });
 });
 
-describe('verificaciones sin modelo', () => {
+describe.runIf(process.platform !== 'win32')('verificaciones sin modelo', () => {
   it('elige los comandos según lo que se tocó', () => {
     const v = { backend: ['mvn spotless:check'], frontend: ['npm test', 'npm run lint'] };
     expect(verificacionesPara(['backend/A.java'], v)).toEqual(['mvn spotless:check']);
